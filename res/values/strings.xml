@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">AudioDSP</string>
+    <string name="action_settings">Settings</string>
+    
+    <string name="debug_title">DEBUG</string>
+    <string name="debug_text">loading</string>
+    <string name="hifreq_text">10000.0</string>
+    
+    <string name="processing_title">PROCESSING</string>
+    <string name="threshold_gate">Threshold gate</string>
+    <string name="pitch_hertz">Pitch in hertz</string>
+    
+    <string name="visualiser_title">VISUALISER</string>
+</resources>
