@@ -13,38 +13,27 @@ public class AndroidAudioOut implements AudioProcessor {
     private static final String TAG = "AudioDSP-AndroidAudioOut";
     private final AudioTrack audioTrack;
 
-    public AndroidAudioOut(TarsosDSPAudioFormat audioFormat, int bufferSizeInSamples, int streamType) {
+    public AndroidAudioOut(TarsosDSPAudioFormat audioFormat, int bufferSize, int streamType) {
+    	
     	if (audioFormat.getChannels() != 1) {
             throw new IllegalArgumentException("TarsosDSP only supports mono audio channel count: " 
             		+ audioFormat.getChannels());
         }
-
-        int sampleRate = (int) audioFormat.getSampleRate();
-        int bufferSizeInBytes = bufferSizeInSamples * audioFormat.getSampleSizeInBits() / 8;
-
-        int minBufferSizeInBytes = AudioTrack.getMinBufferSize(
-        		sampleRate, 
-        		AudioFormat.CHANNEL_OUT_DEFAULT, 
-        		AudioFormat.ENCODING_PCM_16BIT);
-        
-        if(minBufferSizeInBytes > bufferSizeInBytes){
-            throw new IllegalArgumentException("The buffer size should be at least " 
-            		+ (minBufferSizeInBytes / audioFormat.getSampleSizeInBits() / 8) 
-            		+ " (samples) according to  AudioTrack.getMinBufferSize().");
-        }
-
+    	
         audioTrack = new AudioTrack(
-        		streamType, 
-        		sampleRate, 
-        		AudioFormat.CHANNEL_OUT_DEFAULT, 
-        		AudioFormat.ENCODING_PCM_16BIT, 
-        		bufferSizeInBytes,AudioTrack.MODE_STREAM);
-
+        		streamType,
+        		(int)audioFormat.getSampleRate(),
+        		audioFormat.getChannels(),
+        		AudioFormat.ENCODING_PCM_16BIT,
+        		bufferSize,
+        		AudioTrack.MODE_STREAM);
+        
         audioTrack.play();
     }
 
 
     public AndroidAudioOut(TarsosDSPAudioFormat audioFormat) {
+    	// not this on android...
         this(audioFormat, 4096, DEFAULT_STREAM_TYPE);
     }
 
@@ -55,7 +44,7 @@ public class AndroidAudioOut implements AudioProcessor {
         byte[] byteBuffer = audioEvent.getByteBuffer();
 
         //int ret = audioTrack.write(audioEvent.getFloatBuffer(),overlapInSamples,stepSizeInSamples,AudioTrack.WRITE_BLOCKING);
-        int ret = audioTrack.write(byteBuffer,overlapInSamples * 2,stepSizeInSamples * 2);
+        int ret = audioTrack.write(byteBuffer, overlapInSamples * 2, stepSizeInSamples * 2);
         if (ret < 0) {
             Log.e(TAG, "AudioTrack.write returned error code " + ret);
         }

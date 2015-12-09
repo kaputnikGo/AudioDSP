@@ -5,7 +5,8 @@
     
     <string name="debug_title">DEBUG</string>
     <string name="debug_text">loading</string>
-    <string name="hifreq_text">10000.0</string>
+    <string name="hifreq_text">hpf:</string>
+    <string name="shift_text">shift:</string>
     
     <string name="processing_title">PROCESSING</string>
     <string name="threshold_gate">Threshold gate</string>

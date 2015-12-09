@@ -9,7 +9,6 @@ import be.tarsos.dsp.AudioProcessor;
 import be.tarsos.dsp.filters.HighPass;
 import be.tarsos.dsp.filters.IIRFilter;
 import be.tarsos.dsp.io.TarsosDSPAudioFormat;
-import be.tarsos.dsp.io.android.AndroidAudioPlayer;
 import be.tarsos.dsp.io.android.AudioDispatcherFactory;
 import be.tarsos.dsp.pitch.PitchDetectionHandler;
 import be.tarsos.dsp.pitch.PitchDetectionResult;
@@ -27,14 +26,13 @@ import android.media.MediaRecorder.AudioSource;
 import android.os.Bundle;
 import android.text.method.ScrollingMovementMethod;
 import android.util.Log;
-import android.view.Gravity;
 import android.view.Menu;
 import android.view.MenuItem;
 import android.widget.SeekBar;
 import android.widget.SeekBar.OnSeekBarChangeListener;
 import android.widget.TextView;
 
-public class MainActivity extends Activity implements OnSeekBarChangeListener {
+public class MainActivity extends Activity {
 	// NOTES:
 	// https://github.com/JorenSix/TarsosDSP
 	// http://0110.be/releases/TarsosDSP/TarsosDSP-2.3/TarsosDSP-2.3-Documentation/
@@ -48,39 +46,50 @@ public class MainActivity extends Activity implements OnSeekBarChangeListener {
 	private PitchDetectionHandler pdh;
 	private AudioProcessor pitchProcessor;
 	private AudioProcessor thresholdGate;
+	private AndroidPitchShifter androidPitchShifter;
 	private TarsosDSPAudioFormat tarsosAudioFormat;
 	private AndroidAudioOut androidAudioOut;
 	private AudioManager audioManager;
-	
+
 	private AudioVisualiserView audioVisualiserView;
 	private static TextView debugText;
 	private SeekBar hiFreqSeekBar;
 	private TextView hifreqText;
 	private TextView pitchText;
+	private TextView shiftText;
+	private SeekBar shiftSeekBar;
 	private TextView gateText;
 	private int thresh;
 	
 	private static final float THRESHOLD_DB = -70; // decibels
 	
-	private int sampleRate;
-	private int bufferSize;
 	private float hiFrequency;
+	private float shifter;
 	private static final int FREQ_MIN = 0;
 	private static final int FREQ_MAX = 20000;
 	private static final int FREQ_STEP = 500;
 	
-	private static final int EMU_BUFFER = 640;
-	private static final int DEF_BUFFER = 1024;
-	private static final int MAX_BUFFER = 2048;
-	private static final int SAM5_BUFFER = 7168;
-	private int bufferOverlap;
+	private static final int SAM5_BUFFER = 7680;
 	
+	private static final int RATE_48 = 48000;
 	private static final int RATE_44 = 44100;
 	private static final int RATE_22 = 22050;
 	private static final int RATE_16 = 16000;
 	private static final int RATE_11 = 11025;
 	private static final int RATE_8 = 8000;
-	private static final int[] SAMPLE_RATES = new int[] { RATE_44, RATE_22, RATE_16, RATE_11, RATE_8 };		
+	private static final int[] SAMPLE_RATES = new int[] { RATE_48, RATE_44, RATE_22, RATE_16, RATE_11, RATE_8 };
+	private static final int[] POWERS_TWO = new int[] { 512, 1024, 2048, 4096, 8192, 16384 };
+	
+	private static final int DEFAULT_RATE = RATE_44;
+	private static final int DEFAULT_ENCODING = AudioFormat.ENCODING_PCM_16BIT;
+	private static final int DEFAULT_CHANNEL = AudioFormat.CHANNEL_OUT_DEFAULT;
+	
+	private int sampleRate;
+	private int bufferSize;
+	private int bufferOverlap;
+	private int encoding;
+	private int channel;
+	
 	// USB
 	private DeviceContainer deviceContainer;
 	private UsbManager usbManager;
@@ -94,11 +103,48 @@ public class MainActivity extends Activity implements OnSeekBarChangeListener {
 		debugText = (TextView) findViewById(R.id.debug_text);
 		debugText.setMovementMethod(new ScrollingMovementMethod());
 		
+		hifreqText = (TextView) findViewById(R.id.hifreq_text);
 		hiFreqSeekBar = (SeekBar) findViewById(R.id.hi_freq_seek);
 		hiFreqSeekBar.setMax((FREQ_MAX - FREQ_MIN) / FREQ_STEP);
 		hiFreqSeekBar.setProgress(10000);
-		hiFreqSeekBar.setOnSeekBarChangeListener(this);
-		hifreqText = (TextView) findViewById(R.id.hifreq_text);
+		hiFreqSeekBar.setOnSeekBarChangeListener(new OnSeekBarChangeListener() {
+			@Override
+			public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
+				hiFrequency = FREQ_MIN + (progress * FREQ_STEP);
+				updateHiFilter();				
+			}
+			@Override
+			public void onStartTrackingTouch(SeekBar seekBar) {
+				// 				
+			}
+			@Override
+			public void onStopTrackingTouch(SeekBar seekBar) {
+				logger(TAG, "hi cut: " + hiFrequency);				
+			}
+			
+		});
+		
+		shiftText = (TextView) findViewById(R.id.shift_text);
+		shiftSeekBar = (SeekBar) findViewById(R.id.shift_seek);
+		shiftSeekBar.setMax(200);
+		shiftSeekBar.setProgress(1);
+		shiftSeekBar.setOnSeekBarChangeListener(new OnSeekBarChangeListener() {
+			@Override
+			public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
+				// place within usable range 0.1 - 2.0
+				shifter = FREQ_MIN + (progress / 100.f);
+				updateShift();
+			}
+			@Override
+			public void onStartTrackingTouch(SeekBar seekBar) {
+				//				
+			}
+			@Override
+			public void onStopTrackingTouch(SeekBar seekBar) {
+				logger(TAG, "shifted: " + shifter);			
+			}
+			
+		});
 		
 		pitchText = (TextView) findViewById(R.id.pitch_text);
 		gateText = (TextView) findViewById(R.id.gate_text);
@@ -129,32 +175,28 @@ public class MainActivity extends Activity implements OnSeekBarChangeListener {
 
 /*
 * Interface controls   
-*/	
-	@Override
-    public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
-		hiFrequency = FREQ_MIN + (progress * FREQ_STEP);
-		hifreqText.setText(Float.toString(hiFrequency));
-		hipassFilter.setFrequency(hiFrequency);
-    }
-    @Override
-    public void onStartTrackingTouch(SeekBar seekBar) {
-    	
-    }
-    @Override
-    public void onStopTrackingTouch(SeekBar seekBar) {
-    	logger(TAG, "hi cut: " + hiFrequency);
- 
-    }
-    
+*/	    
 	private void updatePitch(float pitch) {
-		pitchText.setText("pitch in Hz: " + pitch);
-		debugText.setGravity(Gravity.NO_GRAVITY); 
+		pitchText.setText("pitch in Hz: " + pitch); 
 	}
 	
 	private void updateGate(double level) {
 		thresh = (int)level; 
 		gateText.setText("Threshold gate: " + thresh);
-	}	
+	}
+	private void updateHiFilter() {
+		hifreqText.setText("hpf: " + Float.toString(hiFrequency));
+		// changed == 0 - 20,000 : step 500		
+		if (hipassFilter != null) {
+			hipassFilter.setFrequency(hiFrequency);
+		}
+	}
+	private void updateShift() {
+		shiftText.setText("shift: " + Float.toString(shifter));
+		if (androidPitchShifter != null) {								
+			androidPitchShifter.setPitchShiftFactor(shifter);
+		}
+	}
 
 /*
 * options settings 
@@ -188,23 +230,37 @@ public class MainActivity extends Activity implements OnSeekBarChangeListener {
 			// wait for it...
 		}
 		else {
-			logger(TAG, "Error determining audio type.");
+			logger(TAG, "Error determining audio type, set defaults");
+			// guaranteed default for Android is 44.1kHz, PCM_16BIT, CHANNEL_IN_MONO
+			// android CHANNEL_OUT_MONO == 4 ; TarsosDSP needs int value 1
+			sampleRate = DEFAULT_RATE;
+			encoding = DEFAULT_ENCODING;
+			channel = DEFAULT_CHANNEL;
+			bufferSize = SAM5_BUFFER; // cannot determine a default...
 		}
-		// defaults
-		sampleRate = RATE_44;
-		bufferSize = SAM5_BUFFER;
-		logger(TAG, "bufferSize: " + bufferSize);
+		//TODO
+		// FFT NEEDS POWERS OF 2
+		// (512, 1024, 2048, 4096, 8192, 16384, etc)
+		// half of the bufferSize is common for an FFT		
+		// SAM5 reports:  min == 3840
+
+		bufferSize = getClosestPowers(bufferSize);
+		bufferOverlap = bufferSize / 2;				
+		logger(TAG, "sampleRate set: " + sampleRate);
+		logger(TAG, "bufferSize set: " + bufferSize);		
+		logger(TAG, "bufferOverlap set: " + bufferOverlap);		
 		
-		// set to zero
+		// set to defaults
 		hiFrequency = 0;
-		bufferOverlap = 0;
+		shifter = 1;
 		thresh = 0;
 		return true;
 	}
 	
 	private void dispatcherEnable() {
 		dispatcher = AudioDispatcherFactory.fromDefaultMicrophone(sampleRate, bufferSize, bufferOverlap);
-		
+
+//PROCESSES	
 		if (hipassFilterProcess()) {
 			dispatcher.addAudioProcessor(hipassFilter);
 			logger(TAG, "hipassFilter added.");
@@ -212,7 +268,7 @@ public class MainActivity extends Activity implements OnSeekBarChangeListener {
 		else {
 			logger(TAG, "highpassFilter failed to load.");
 		}
-		
+
 		if (pitchInProcess()) {
 			dispatcher.addAudioProcessor(pitchProcessor);
 			logger(TAG, "pitchProcessor added.");
@@ -229,6 +285,16 @@ public class MainActivity extends Activity implements OnSeekBarChangeListener {
 			logger(TAG, "threshold gate failed to load.");
 		}
 		
+//EXPERIMENTAL
+		if (androidPitchShift()) {
+			dispatcher.addAudioProcessor(androidPitchShifter);			
+			logger(TAG, "pitchshift enabled.");
+		}
+		else {
+			logger(TAG, "pitchshift failed to load.");
+		}
+		
+//OUPUT
 		if (androidAudioOutput()) {
 			dispatcher.addAudioProcessor(androidAudioOut);
 			logger(TAG, "android output added.");
@@ -236,7 +302,7 @@ public class MainActivity extends Activity implements OnSeekBarChangeListener {
 		else {
 			logger(TAG, "android output failed to load.");
 		}
-
+		
 		audioThread = new Thread(dispatcher, "Audio Dispatcher");
 		audioThread.start();
 		logger(TAG, "audioThread started.");
@@ -258,7 +324,6 @@ public class MainActivity extends Activity implements OnSeekBarChangeListener {
 			@Override
 			public void handlePitch(PitchDetectionResult result, AudioEvent audioEvent) {
 				final float pitchInHz = result.getPitch();
-
 				final byte[] byteBuffer = audioEvent.getByteBuffer();
 			
 				runOnUiThread(new Runnable() {
@@ -289,7 +354,6 @@ public class MainActivity extends Activity implements OnSeekBarChangeListener {
 					public void run() {
 						if (level > THRESHOLD_DB) {
 							// no gating yet...
-							logger(TAG, "threshold crossed.");
 						}
 						updateGate(level);
 					}
@@ -306,6 +370,29 @@ public class MainActivity extends Activity implements OnSeekBarChangeListener {
 			return true;
 		else 
 			return false;
+	}
+	
+	private boolean androidPitchShift() {				
+		// dispatcher needs to be init before this is called
+		//TODO
+		// pitchShifter staccato effect
+		
+		// "For real lower latency, you need to use a shorter FFT, and lose frequency resolution, 
+		// or use another frequency or pitch estimator, 
+		// which will also have other time-frequency-robustness tradeoffs"
+		
+		// a reduction of the FFT size as well as a larger step size.
+		
+		if (dispatcher != null) {
+			// AudioDispatcher dispatcher, double factor, double sampleRate, int size, int overlap
+			int overlap = bufferSize - bufferSize / 4; // 75% overlap (3072)
+			androidPitchShifter = new AndroidPitchShifter(dispatcher, 1, sampleRate, bufferSize, overlap);
+			if (androidPitchShifter != null) {
+				return true;
+			}
+		}
+		
+		return false;
 	}
 	
 	private boolean androidAudioOutput() {
@@ -326,14 +413,12 @@ public class MainActivity extends Activity implements OnSeekBarChangeListener {
 		}
 		
 		tarsosAudioFormat = new TarsosDSPAudioFormat(
-    			RATE_44, 
-    			AudioFormat.ENCODING_PCM_16BIT, 
-    			AudioFormat.CHANNEL_OUT_DEFAULT, 
-    			false, 
-    			false);
-    	
-    	// android channel_out_mono == 4
-    	
+    			sampleRate, 
+    			encoding, 
+    			channel, 
+    			true, // signed 
+    			false); // bigEndian
+    			
 		androidAudioOut = new AndroidAudioOut(
 				tarsosAudioFormat, 
 				bufferSize, 
@@ -389,55 +474,64 @@ public class MainActivity extends Activity implements OnSeekBarChangeListener {
 		return 20.0 * Math.log10(value);
 	}
 	
-	private boolean determineAudioType() {
-		// getAudioRecord object, query it, release it
-		AudioRecord candidate = getAudioRecord();
-		if (candidate != null) {
-			candidate.release();
-			candidate = null;
-			return true;
-		}
-		else {
-			logger(TAG, "audioRecord candidate is null.");
-			return false;
-		}
-	}	
 	// only for querying a device, 
 	// TarsosDSP sets its own AudioRecord object
-	private AudioRecord getAudioRecord() {
+	private boolean determineAudioType() {
 	    for (int rate : SAMPLE_RATES) {
 	        for (short audioFormat : new short[] { 
-	        		AudioFormat.ENCODING_PCM_8BIT, 
-	        		AudioFormat.ENCODING_PCM_16BIT }) {
+	        		AudioFormat.ENCODING_PCM_16BIT,
+	        		AudioFormat.ENCODING_PCM_8BIT }) {
 	        	
 	            for (short channelConfig : new short[] { 
+	            		AudioFormat.CHANNEL_IN_DEFAULT,
 	            		AudioFormat.CHANNEL_IN_MONO, 
 	            		AudioFormat.CHANNEL_IN_STEREO }) {
 	                try {
 	                    logger(TAG, "Try rate " + rate + "Hz, bits: " + audioFormat + ", channel: "+ channelConfig);
 	                    
-	                    int bufferSize = AudioRecord.getMinBufferSize(rate, channelConfig, audioFormat);
-	                    if (bufferSize != AudioRecord.ERROR_BAD_VALUE) {
+	                    int buffSize = AudioRecord.getMinBufferSize(rate, channelConfig, audioFormat);
+	                    if (buffSize != AudioRecord.ERROR_BAD_VALUE) {
 	                        // check if we can instantiate and have a success
 	                        AudioRecord recorder = new AudioRecord(
 	                        		AudioSource.DEFAULT, 
 	                        		rate, 
 	                        		channelConfig, 
 	                        		audioFormat, 
-	                        		bufferSize);
+	                        		buffSize);
 
 	                        if (recorder.getState() == AudioRecord.STATE_INITIALIZED) {
-	                        	logger(TAG, "found, rate: " + rate + ", buff: " + bufferSize);
-	                            return recorder;
+	                        	logger(TAG, "found, rate: " + rate + ", min-buff: " + buffSize);
+	                        	// set our values
+	                        	sampleRate = rate;
+	                        	channel = channelConfig;
+	                        	encoding = audioFormat;
+	                        	bufferSize = buffSize;
+	                        	recorder.release();
+	                        	recorder = null;
+	                            return true;
 	                        }
 	                    }
-	                } catch (Exception e) {
+	                } 
+	                catch (Exception e) {
 	                    logger(TAG, "Rate: " + rate + "Exception, keep trying, e:" + e.toString());
 	                }
 	            }
 	        }
 	    }
-	    return null;
+	    logger(TAG, "determine audioRecord failure.");
+	    return false;
+	}
+	
+	private int getClosestPowers(int reported) {
+		// return the next highest power from the minimum reported
+		// 512, 1024, 2048, 4096, 8192, 16384
+		for (int power : POWERS_TWO) {
+			if (reported <= power) {
+				return power;
+			}			
+		}
+		// didn't find power, return reported
+		return reported;
 	}
 
     public static void logger(String tag, String message) {
