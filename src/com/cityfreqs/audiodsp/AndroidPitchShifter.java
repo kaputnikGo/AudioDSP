@@ -26,7 +26,7 @@ public class AndroidPitchShifter implements AudioProcessor {
 	private int sizeDiv2;
 	
 	// processing loop vars:
-	private float window;
+	private double window;
 	private float freqPerBin;
 	private float phase;
 	private double tmp;
@@ -44,16 +44,21 @@ public class AndroidPitchShifter implements AudioProcessor {
 	public AndroidPitchShifter(AudioDispatcher dispatcher, double factor, double sampleRate, int bufferSize, int overlap) {
 		// ref: http://downloads.dspdimension.com/smbPitchShift.cpp
 		// ref: http://blogs.zynaptiq.com/bernsee/pitch-shifting-using-the-ft/
-		
-		// possibly: a reduction of the FFT size as well as a larger step size.
+
+		//TODO
+		// pitchShifter staccato effect
+		// read: http://www.ni.com/white-paper/4844/en/
 		
 		pitchShiftRatio = factor;
 		size = bufferSize;
 		this.sampleRate = sampleRate;
 		this.dispatcher = dispatcher;
+		
+		//int overlap = bufferSize - bufferSize / 4; // 75% overlap (3072)		
 		this.overlap = overlap; // 3072
 		overSampling = size / (size - overlap); // == 4
 		stepSize = size / overlap;
+		
 		//expected = 2.0 * Math.PI * (double)(size - this.overlap) / (double)size;
 		expected = 2.0 * Math.PI * (double)stepSize / (double)size;
 		fft = new FFT(size);
@@ -69,7 +74,8 @@ public class AndroidPitchShifter implements AudioProcessor {
 		newFrequencies = new float[sizeDiv2];
 		audioIn = new float[size];
 		fftData = new float[size];
-		newFFTData = new float[size];
+		newFFTData = new float[size * 2];
+
 	}
 	
 	public void setPitchShiftFactor(double newPitchShiftFactor) {
@@ -81,46 +87,41 @@ public class AndroidPitchShifter implements AudioProcessor {
 	// need this in process()
 		newMagnitudes = new float[sizeDiv2];
 	// analysis
-		// need a buffer to fill first 
-		// then start processing, to account for latency?
-		// audioEvent data encoded in floats from -1.0 to 1.0.
-		
-		audioIn = audioEvent.getFloatBuffer().clone();
-			
-		for (int i = 0; i < size; i++ ) {
-			window = (float)(-0.5f * Math.cos(2.f * Math.PI * (double)i / (double)size) + 0.5f);
-			fftData[i] = audioIn[i] * window;
-			//fftData[i + size] = audioIn[i] * window;
+		//audioIn = audioEvent.getFloatBuffer().clone();
+		System.arraycopy(audioEvent.getFloatBuffer(), 0, audioIn, 0, size);
+	
+		for (int i = 0; i < size; i++) {
+			// this creates a square wave...
+			window = .5 * Math.cos(2.f * Math.PI * (double)i / (double)size) + .5;
+			fftData[i] = (float)(audioIn[i] * window);
+
 		}
-					
-		// arraycopy(Object src, int srcPos, Object dst, int dstPos, int length)
-		//System.arraycopy(fftData, 0, fftData, 0, sizeDiv2);
+		
 		/*
-		* 
-		* 
-		*/
+		 * 	for testing the windowing (should have real, imaginary interleaved...
+		 * 
+		 */
 		/*
-		audioEvent.setFloatBuffer(fftData);
+		System.arraycopy(outputAccumulator, sizeDiv2, outputAccumulator, 0, size);
+
+		audioEvent.setFloatBuffer(outputAccumulator);
 		audioEvent.setOverlap(0);
 		dispatcher.setStepSizeAndOverlap(size, 0);
-
 		return true;
 		*/
-		
 		/*
-		 * 
 		 * 
 		 * 
 		 */
 		
-		
+
 		//fourier transform audio
 		fft.forwardTransform(fftData);
 		// calc magnitudes and phase
 		fft.powerAndPhaseFromFFT(fftData, currentMagnitudes, currentPhase);
 		// distance in Hz between fft bins
 		freqPerBin = (float)(sampleRate / (float)size);
-//		
+		
 		for (int i = 0; i < sizeDiv2; i++) {
 			phase = currentPhase[i];
 			// compute phase diff
@@ -183,23 +184,14 @@ public class AndroidPitchShifter implements AudioProcessor {
 		
 		// windowing, add output to accumulator
 		for (int i = 0; i < size; i++) {
-			window = (float)(-0.5f * Math.cos(2.0 * Math.PI * (double)i / (double)size) + 0.5f);
+			// this creates the stutter? (as well as top one)
+			window = -.5 * Math.cos(2.f * Math.PI * (double)i / (double)size) + .5;
 			// why 4000?
-			outputAccumulator[i] += 4000 * window * newFFTData[i] / (float)(size * overSampling);
-			outputAccumulator[i] += 2 * window * (newFFTData[i] * 2);// / (float)(sizeDiv2 * overSampling);
-			//outputAccumulator[i * 2] += 2 * window * (newFFTData[i] * 2);// / (float)(sizeDiv2 * overSampling);
+			outputAccumulator[i] += 4000.f * window * newFFTData[i] / (size * overSampling);			
+			//outputAccumulator[i] = newFFTData[i] * window;
 		}
-			
-		// memmove allows byte copies, overlapping
-		// memmove ( void * destination, const void * source, size_t num );
-		// memmove(gOutputAccum, gOutputAccum+stepSize, fftFrameSize*sizeof(float));
-		
-		// it appears to be getting only half the output audio - hence the stutter
-		// outputAccumulator is [size * 2] and needs to be outputted at [size], so half the original
-		
-		// without this arraycopy, audio recieved loops indefinitely, still stutters		
-		// arraycopy(Object src, int srcPos, Object dst, int dstPos, int length)
-		//System.arraycopy(outputAccumulator, sizeDiv2, outputAccumulator, 0, size);
+
+		// not stepSize...
 		System.arraycopy(outputAccumulator, sizeDiv2, outputAccumulator, 0, size);
 
 		audioEvent.setFloatBuffer(outputAccumulator);
@@ -207,7 +199,7 @@ public class AndroidPitchShifter implements AudioProcessor {
 		dispatcher.setStepSizeAndOverlap(size, 0);
 
 		return true;
-		
+
 	}
 	
 	@Override

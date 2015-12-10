@@ -12,6 +12,10 @@ public class AndroidAudioOut implements AudioProcessor {
     public static final int DEFAULT_STREAM_TYPE = AudioManager.STREAM_MUSIC;
     private static final String TAG = "AudioDSP-AndroidAudioOut";
     private final AudioTrack audioTrack;
+    private int audioReturn;
+    private int overlap;
+    private int stepSize;
+    private int bufferSize;
 
     public AndroidAudioOut(TarsosDSPAudioFormat audioFormat, int bufferSize, int streamType) {
     	
@@ -19,7 +23,7 @@ public class AndroidAudioOut implements AudioProcessor {
             throw new IllegalArgumentException("TarsosDSP only supports mono audio channel count: " 
             		+ audioFormat.getChannels());
         }
-    	
+    	this.bufferSize = bufferSize;
         audioTrack = new AudioTrack(
         		streamType,
         		(int)audioFormat.getSampleRate(),
@@ -39,14 +43,12 @@ public class AndroidAudioOut implements AudioProcessor {
 
     @Override
     public boolean process(AudioEvent audioEvent) {
-        int overlapInSamples = audioEvent.getOverlap();
-        int stepSizeInSamples = audioEvent.getBufferSize() - overlapInSamples;
-        byte[] byteBuffer = audioEvent.getByteBuffer();
-
-        //int ret = audioTrack.write(audioEvent.getFloatBuffer(),overlapInSamples,stepSizeInSamples,AudioTrack.WRITE_BLOCKING);
-        int ret = audioTrack.write(byteBuffer, overlapInSamples * 2, stepSizeInSamples * 2);
-        if (ret < 0) {
-            Log.e(TAG, "AudioTrack.write returned error code " + ret);
+        overlap = audioEvent.getOverlap();
+        stepSize = bufferSize - overlap;   	
+        // write(byte[] audioData, int offsetInBytes, int sizeInBytes) :: says needs ENCODING_PCM_8BIT
+        audioReturn = audioTrack.write(audioEvent.getByteBuffer(), overlap * 2, stepSize * 2);
+        if (audioReturn < 0) {
+            Log.e(TAG, "AudioTrack.write returned error code " + audioReturn);
         }
         return true;
     }

@@ -5,7 +5,7 @@ import java.util.Iterator;
 
 import be.tarsos.dsp.AudioDispatcher;
 import be.tarsos.dsp.AudioEvent;
-import be.tarsos.dsp.AudioProcessor;
+import be.tarsos.dsp.GainProcessor;
 import be.tarsos.dsp.filters.HighPass;
 import be.tarsos.dsp.filters.IIRFilter;
 import be.tarsos.dsp.io.TarsosDSPAudioFormat;
@@ -44,27 +44,30 @@ public class MainActivity extends Activity {
 	private AudioDispatcher dispatcher;
 	private IIRFilter hipassFilter;
 	private PitchDetectionHandler pdh;
-	private AudioProcessor pitchProcessor;
-	private AudioProcessor thresholdGate;
+	private PitchProcessor pitchProcessor;
+	private ThresholdGate thresholdGate;
 	private AndroidPitchShifter androidPitchShifter;
+	private GainProcessor gainProcessor;
 	private TarsosDSPAudioFormat tarsosAudioFormat;
 	private AndroidAudioOut androidAudioOut;
+	
 	private AudioManager audioManager;
-
 	private AudioVisualiserView audioVisualiserView;
+	
 	private static TextView debugText;
 	private SeekBar hiFreqSeekBar;
 	private TextView hifreqText;
-	private TextView pitchText;
 	private TextView shiftText;
 	private SeekBar shiftSeekBar;
+	private TextView gainText;
+	private SeekBar gainSeekBar;
 	private TextView gateText;
-	private int thresh;
-	
-	private static final float THRESHOLD_DB = -70; // decibels
+
+	private static final float DEFAULT_THRESHOLD = -90; // decibels
 	
 	private float hiFrequency;
 	private float shifter;
+	private float gain;
 	private static final int FREQ_MIN = 0;
 	private static final int FREQ_MAX = 20000;
 	private static final int FREQ_STEP = 500;
@@ -84,6 +87,8 @@ public class MainActivity extends Activity {
 	private static final int DEFAULT_ENCODING = AudioFormat.ENCODING_PCM_16BIT;
 	private static final int DEFAULT_CHANNEL = AudioFormat.CHANNEL_OUT_DEFAULT;
 	
+	private static final PitchEstimationAlgorithm PITCH_ALGORITHM = PitchEstimationAlgorithm.FFT_PITCH;
+	
 	private int sampleRate;
 	private int bufferSize;
 	private int bufferOverlap;
@@ -97,11 +102,11 @@ public class MainActivity extends Activity {
 	@Override
 	protected void onCreate(Bundle savedInstanceState) {
 		super.onCreate(savedInstanceState);
-		setContentView(R.layout.activity_main);
-		audioVisualiserView = (AudioVisualiserView) findViewById(R.id.audio_visualiser_view);
-		
+		setContentView(R.layout.activity_main);		
 		debugText = (TextView) findViewById(R.id.debug_text);
 		debugText.setMovementMethod(new ScrollingMovementMethod());
+
+		gateText = (TextView) findViewById(R.id.gate_text);
 		
 		hifreqText = (TextView) findViewById(R.id.hifreq_text);
 		hiFreqSeekBar = (SeekBar) findViewById(R.id.hi_freq_seek);
@@ -119,7 +124,7 @@ public class MainActivity extends Activity {
 			}
 			@Override
 			public void onStopTrackingTouch(SeekBar seekBar) {
-				logger(TAG, "hi cut: " + hiFrequency);				
+				//logger(TAG, "hi cut: " + hiFrequency);				
 			}
 			
 		});
@@ -133,6 +138,7 @@ public class MainActivity extends Activity {
 			public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
 				// place within usable range 0.1 - 2.0
 				shifter = FREQ_MIN + (progress / 100.f);
+				if (shifter <= 0.f) shifter = 0.1f;
 				updateShift();
 			}
 			@Override
@@ -141,13 +147,33 @@ public class MainActivity extends Activity {
 			}
 			@Override
 			public void onStopTrackingTouch(SeekBar seekBar) {
-				logger(TAG, "shifted: " + shifter);			
+				//logger(TAG, "shifted: " + shifter);			
 			}
 			
 		});
 		
-		pitchText = (TextView) findViewById(R.id.pitch_text);
-		gateText = (TextView) findViewById(R.id.gate_text);
+		gainText = (TextView) findViewById(R.id.gain_text);
+		gainSeekBar = (SeekBar) findViewById(R.id.gain_seek);
+		gainSeekBar.setMax(100);
+		gainSeekBar.setProgress(50); // 
+		gainSeekBar.setOnSeekBarChangeListener(new OnSeekBarChangeListener() {
+			@Override
+			public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
+				// place within usable range -100 - 100
+				gain = FREQ_MIN + progress;
+				updateGain();
+			}
+			@Override
+			public void onStartTrackingTouch(SeekBar seekBar) {
+				//				
+			}
+			@Override
+			public void onStopTrackingTouch(SeekBar seekBar) {
+				//logger(TAG, "gained: " + gain);			
+			}
+			
+		});		
+		audioVisualiserView = (AudioVisualiserView) findViewById(R.id.audio_visualiser_view);
 	}
 	
 	@Override
@@ -175,15 +201,7 @@ public class MainActivity extends Activity {
 
 /*
 * Interface controls   
-*/	    
-	private void updatePitch(float pitch) {
-		pitchText.setText("pitch in Hz: " + pitch); 
-	}
-	
-	private void updateGate(double level) {
-		thresh = (int)level; 
-		gateText.setText("Threshold gate: " + thresh);
-	}
+*/	    	
 	private void updateHiFilter() {
 		hifreqText.setText("hpf: " + Float.toString(hiFrequency));
 		// changed == 0 - 20,000 : step 500		
@@ -196,6 +214,15 @@ public class MainActivity extends Activity {
 		if (androidPitchShifter != null) {								
 			androidPitchShifter.setPitchShiftFactor(shifter);
 		}
+	}
+	private void updateGain() {
+		gainText.setText("gain: " + Float.toString(gain));
+		if (gainProcessor != null) {
+			gainProcessor.setGain(gain);
+		}
+	}
+	private void updateGate(double level) {
+		gateText.setText("Threshold gate: " + String.format("%.2f", level));
 	}
 
 /*
@@ -238,29 +265,32 @@ public class MainActivity extends Activity {
 			channel = DEFAULT_CHANNEL;
 			bufferSize = SAM5_BUFFER; // cannot determine a default...
 		}
-		//TODO
-		// FFT NEEDS POWERS OF 2
-		// (512, 1024, 2048, 4096, 8192, 16384, etc)
-		// half of the bufferSize is common for an FFT		
-		// SAM5 reports:  min == 3840
-
-		bufferSize = getClosestPowers(bufferSize);
-		bufferOverlap = bufferSize / 2;				
+		
+		bufferSize = getClosestPowers(bufferSize); // 4096
+		bufferOverlap = bufferSize / 2;	// 2048
 		logger(TAG, "sampleRate set: " + sampleRate);
 		logger(TAG, "bufferSize set: " + bufferSize);		
-		logger(TAG, "bufferOverlap set: " + bufferOverlap);		
+		logger(TAG, "bufferOverlap set: " + bufferOverlap);
 		
 		// set to defaults
 		hiFrequency = 0;
 		shifter = 1;
-		thresh = 0;
+		gain = 50;
 		return true;
 	}
 	
 	private void dispatcherEnable() {
-		dispatcher = AudioDispatcherFactory.fromDefaultMicrophone(sampleRate, bufferSize, bufferOverlap);
+		dispatcher = AudioDispatcherFactory.fromDefaultMicrophone(sampleRate, bufferSize, 0);
 
-//PROCESSES	
+//PROCESSES
+		if (pitchInProcess()) {
+			dispatcher.addAudioProcessor(pitchProcessor);
+			logger(TAG, "pitchProcessor added.");
+		}
+		else {
+			logger(TAG, "pitch processor failed to load.");
+		}
+
 		if (hipassFilterProcess()) {
 			dispatcher.addAudioProcessor(hipassFilter);
 			logger(TAG, "hipassFilter added.");
@@ -269,23 +299,6 @@ public class MainActivity extends Activity {
 			logger(TAG, "highpassFilter failed to load.");
 		}
 
-		if (pitchInProcess()) {
-			dispatcher.addAudioProcessor(pitchProcessor);
-			logger(TAG, "pitchProcessor added.");
-		}
-		else {
-			logger(TAG, "pitch processor failed to load.");
-		}
-		
-		if (thresholdGateProcess()) {
-			dispatcher.addAudioProcessor(thresholdGate);
-			logger(TAG, "threshold gate added.");
-		}
-		else {
-			logger(TAG, "threshold gate failed to load.");
-		}
-		
-//EXPERIMENTAL
 		if (androidPitchShift()) {
 			dispatcher.addAudioProcessor(androidPitchShifter);			
 			logger(TAG, "pitchshift enabled.");
@@ -293,8 +306,25 @@ public class MainActivity extends Activity {
 		else {
 			logger(TAG, "pitchshift failed to load.");
 		}
-		
-//OUPUT
+
+//OUPUT	
+
+		if(gainProcess()) {
+			dispatcher.addAudioProcessor(gainProcessor);
+			logger(TAG, "gain added.");
+		}
+		else {
+			logger(TAG, "gain failed to load.");
+		}
+
+		if (thresholdGateProcess()) {
+			dispatcher.addAudioProcessor(thresholdGate);
+			logger(TAG, "threshold gate added.");
+		}
+		else {
+			logger(TAG, "threshold gate failed to load.");
+		}
+
 		if (androidAudioOutput()) {
 			dispatcher.addAudioProcessor(androidAudioOut);
 			logger(TAG, "android output added.");
@@ -318,54 +348,33 @@ public class MainActivity extends Activity {
 		else 
 			return false;		
 	}
-
+	
 	private boolean pitchInProcess() {		
 		pdh = new PitchDetectionHandler() {
 			@Override
 			public void handlePitch(PitchDetectionResult result, AudioEvent audioEvent) {
-				final float pitchInHz = result.getPitch();
 				final byte[] byteBuffer = audioEvent.getByteBuffer();
 			
 				runOnUiThread(new Runnable() {
 					@Override
 					public void run() {
-						updatePitch(pitchInHz);
 						audioVisualiserView.updateVisualiser(byteBuffer);
+						// get the SPL as well
+						updateGate(thresholdGate.currentSPL());
 					}
 				});
 			}
 		};
-		pitchProcessor = new PitchProcessor(PitchEstimationAlgorithm.FFT_YIN, sampleRate, bufferSize, pdh);
+		pitchProcessor = new PitchProcessor(PITCH_ALGORITHM, sampleRate, bufferSize, pdh);
 		
 		if (pitchProcessor != null) 
 			return true;
 		else 
 			return false;
 	}
-	
+
 	private boolean thresholdGateProcess() {
-		thresholdGate = new AudioProcessor() {
-			@Override 
-			public boolean process(AudioEvent audioEvent) {
-				float[] buffer = audioEvent.getFloatBuffer();
-				final double level = soundPressureLevel(buffer);
-				runOnUiThread(new Runnable() {
-					@Override
-					public void run() {
-						if (level > THRESHOLD_DB) {
-							// no gating yet...
-						}
-						updateGate(level);
-					}
-				});
-				return true;
-			}
-			
-			@Override
-			public void processingFinished() {
-				// nothing
-			}			
-		};
+		thresholdGate = new ThresholdGate(DEFAULT_THRESHOLD, true);
 		if (thresholdGate != null) 
 			return true;
 		else 
@@ -373,35 +382,62 @@ public class MainActivity extends Activity {
 	}
 	
 	private boolean androidPitchShift() {				
-		// dispatcher needs to be init before this is called
-		//TODO
-		// pitchShifter staccato effect
-		
-		// "For real lower latency, you need to use a shorter FFT, and lose frequency resolution, 
-		// or use another frequency or pitch estimator, 
-		// which will also have other time-frequency-robustness tradeoffs"
-		
-		// a reduction of the FFT size as well as a larger step size.
-		
 		if (dispatcher != null) {
 			// AudioDispatcher dispatcher, double factor, double sampleRate, int size, int overlap
-			int overlap = bufferSize - bufferSize / 4; // 75% overlap (3072)
-			androidPitchShifter = new AndroidPitchShifter(dispatcher, 1, sampleRate, bufferSize, overlap);
+			androidPitchShifter = new AndroidPitchShifter(dispatcher, 1, sampleRate, bufferSize, bufferOverlap);
 			if (androidPitchShifter != null) {
 				return true;
 			}
-		}
-		
+		}		
 		return false;
+	}	
+	
+	/*
+	private boolean pitchResynthProcess() {
+		pitchResynth = new PitchResyntheziser(sampleRate);
+
+		pdh = new PitchDetectionHandler() {
+			@Override
+			public void handlePitch(PitchDetectionResult result, AudioEvent audioEvent) {
+				//final float pitchInHz = result.getPitch();
+				final byte[] byteBuffer = audioEvent.getByteBuffer();
+			
+				runOnUiThread(new Runnable() {
+					@Override
+					public void run() {
+						//updatePitch(pitchInHz);
+						audioVisualiserView.updateVisualiser(byteBuffer);
+						// get the SPL as well
+						updateGate(thresholdGate.currentSPL());
+					}
+				});
+			}
+		};
+		pitchProcessor = new PitchProcessor(PITCH_ALGORITHM, sampleRate, bufferSize, pitchResynth);
+		
+		if (pitchProcessor != null) 
+			return true;
+		else 
+			return false;
+	}
+	*/
+
+	private boolean gainProcess() {
+		// this is effecting the entire AudioEvent chain, therefore the gate
+		double defaultGain = 50;
+		gainProcessor = new GainProcessor(defaultGain);
+		if (gainProcessor != null) 
+			return true;
+		else 
+			return false;
 	}
 	
 	private boolean androidAudioOutput() {
-		// need to check headphone is plugged in
-		audioManager = (AudioManager)getSystemService(Context.AUDIO_SERVICE);		
-		
 		// String audioManager.getProperty(android.media.property.SUPPORT_SPEAKER_NEAR_ULTRASOUND);
 		// : android.media.property.SUPPORT_MIC_NEAR_ULTRASOUND
 		// : android.media.property.SUPPORT_SPEAKER_NEAR_ULTRASOUND
+		
+		audioManager = (AudioManager)getSystemService(Context.AUDIO_SERVICE);
 		
 		if (audioManager.isSpeakerphoneOn()) {
 			// do not allow output at the moment
@@ -421,7 +457,7 @@ public class MainActivity extends Activity {
     			
 		androidAudioOut = new AndroidAudioOut(
 				tarsosAudioFormat, 
-				bufferSize, 
+				bufferSize,
 				AudioManager.STREAM_MUSIC);
 		
 		if (androidAudioOut != null) 
@@ -429,13 +465,14 @@ public class MainActivity extends Activity {
 		else 
 			return false;
 	}
-	
+
 /*
 * USB device   
 */	
 	// http://developer.android.com/guide/topics/connectivity/usb/host.html
 	// SDR device driver: http://sdr.osmocom.org/trac/
 	
+
 	private boolean getIntentUsbDevice(Intent intent) {
 		// the device_filter.xml has a hardcoded usb device declaration
 		// update it to the SDR when it gets here...
@@ -464,7 +501,8 @@ public class MainActivity extends Activity {
 	
 /*
 * Utilities   
-*/ 		
+*/ 	
+	/*
 	private double soundPressureLevel(final float[] buffer) {
 		double power = 0.0D;
 		for (float element : buffer) {
@@ -473,7 +511,7 @@ public class MainActivity extends Activity {
 		double value = Math.pow(power, 0.5) / buffer.length;
 		return 20.0 * Math.log10(value);
 	}
-	
+	*/
 	// only for querying a device, 
 	// TarsosDSP sets its own AudioRecord object
 	private boolean determineAudioType() {
