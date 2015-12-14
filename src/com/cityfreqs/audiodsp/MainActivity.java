@@ -5,7 +5,6 @@ import java.util.Iterator;
 
 import be.tarsos.dsp.AudioDispatcher;
 import be.tarsos.dsp.AudioEvent;
-import be.tarsos.dsp.GainProcessor;
 import be.tarsos.dsp.filters.HighPass;
 import be.tarsos.dsp.filters.IIRFilter;
 import be.tarsos.dsp.io.TarsosDSPAudioFormat;
@@ -37,6 +36,12 @@ public class MainActivity extends Activity {
 	// https://github.com/JorenSix/TarsosDSP
 	// http://0110.be/releases/TarsosDSP/TarsosDSP-2.3/TarsosDSP-2.3-Documentation/
 	
+	// String audioManager.getProperty(android.media.property.SUPPORT_SPEAKER_NEAR_ULTRASOUND);
+	// : android.media.property.SUPPORT_MIC_NEAR_ULTRASOUND
+	// : android.media.property.SUPPORT_SPEAKER_NEAR_ULTRASOUND
+	// freq range to seek: 18.5kHz - 20kHz
+	
+	
 	private static final String TAG = "AudioDSP";
 	private static final boolean DEBUG = true;
 	
@@ -46,8 +51,6 @@ public class MainActivity extends Activity {
 	private PitchDetectionHandler pdh;
 	private PitchProcessor pitchProcessor;
 	private ThresholdGate thresholdGate;
-	private AndroidPitchShifter androidPitchShifter;
-	private GainProcessor gainProcessor;
 	private TarsosDSPAudioFormat tarsosAudioFormat;
 	private AndroidAudioOut androidAudioOut;
 	
@@ -57,19 +60,16 @@ public class MainActivity extends Activity {
 	private static TextView debugText;
 	private SeekBar hiFreqSeekBar;
 	private TextView hifreqText;
-	private TextView shiftText;
-	private SeekBar shiftSeekBar;
-	private TextView gainText;
-	private SeekBar gainSeekBar;
 	private TextView gateText;
+	private SeekBar gateSeekBar;
+	private TextView thresholdText;
+	private TextView pitchText;
 
-	private static final float DEFAULT_THRESHOLD = -90; // decibels
+	private static final float DEFAULT_THRESHOLD = -80; // decibels
 	
 	private float hiFrequency;
-	private float shifter;
-	private float gain;
-	private static final int FREQ_MIN = 0;
-	private static final int FREQ_MAX = 20000;
+	private float gate;
+	private float lastPitch;
 	private static final int FREQ_STEP = 500;
 	
 	private static final int SAM5_BUFFER = 7680;
@@ -87,7 +87,7 @@ public class MainActivity extends Activity {
 	private static final int DEFAULT_ENCODING = AudioFormat.ENCODING_PCM_16BIT;
 	private static final int DEFAULT_CHANNEL = AudioFormat.CHANNEL_OUT_DEFAULT;
 	
-	private static final PitchEstimationAlgorithm PITCH_ALGORITHM = PitchEstimationAlgorithm.FFT_PITCH;
+	private static final PitchEstimationAlgorithm PITCH_ALGORITHM = PitchEstimationAlgorithm.FFT_YIN;
 	
 	private int sampleRate;
 	private int bufferSize;
@@ -105,17 +105,19 @@ public class MainActivity extends Activity {
 		setContentView(R.layout.activity_main);		
 		debugText = (TextView) findViewById(R.id.debug_text);
 		debugText.setMovementMethod(new ScrollingMovementMethod());
-
-		gateText = (TextView) findViewById(R.id.gate_text);
+		
+		thresholdText = (TextView) findViewById(R.id.threshold_text);
+		pitchText = (TextView) findViewById(R.id.pitch_text);
+		audioVisualiserView = (AudioVisualiserView) findViewById(R.id.audio_visualiser_view);		
 		
 		hifreqText = (TextView) findViewById(R.id.hifreq_text);
 		hiFreqSeekBar = (SeekBar) findViewById(R.id.hi_freq_seek);
-		hiFreqSeekBar.setMax((FREQ_MAX - FREQ_MIN) / FREQ_STEP);
-		hiFreqSeekBar.setProgress(10000);
+		hiFreqSeekBar.setMax(42);
+		hiFreqSeekBar.setProgress(37);
 		hiFreqSeekBar.setOnSeekBarChangeListener(new OnSeekBarChangeListener() {
 			@Override
 			public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
-				hiFrequency = FREQ_MIN + (progress * FREQ_STEP);
+				hiFrequency = progress * FREQ_STEP;
 				updateHiFilter();				
 			}
 			@Override
@@ -129,39 +131,17 @@ public class MainActivity extends Activity {
 			
 		});
 		
-		shiftText = (TextView) findViewById(R.id.shift_text);
-		shiftSeekBar = (SeekBar) findViewById(R.id.shift_seek);
-		shiftSeekBar.setMax(200);
-		shiftSeekBar.setProgress(1);
-		shiftSeekBar.setOnSeekBarChangeListener(new OnSeekBarChangeListener() {
+		gateText = (TextView) findViewById(R.id.gate_text);
+		gateSeekBar = (SeekBar) findViewById(R.id.gate_seek);
+		gateSeekBar.setMax(100);
+		gateSeekBar.setProgress(20); // -80dB
+		gateSeekBar.setOnSeekBarChangeListener(new OnSeekBarChangeListener() {
 			@Override
 			public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
-				// place within usable range 0.1 - 2.0
-				shifter = FREQ_MIN + (progress / 100.f);
-				if (shifter <= 0.f) shifter = 0.1f;
-				updateShift();
-			}
-			@Override
-			public void onStartTrackingTouch(SeekBar seekBar) {
-				//				
-			}
-			@Override
-			public void onStopTrackingTouch(SeekBar seekBar) {
-				//logger(TAG, "shifted: " + shifter);			
-			}
-			
-		});
-		
-		gainText = (TextView) findViewById(R.id.gain_text);
-		gainSeekBar = (SeekBar) findViewById(R.id.gain_seek);
-		gainSeekBar.setMax(100);
-		gainSeekBar.setProgress(50); // 
-		gainSeekBar.setOnSeekBarChangeListener(new OnSeekBarChangeListener() {
-			@Override
-			public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
-				// place within usable range -100 - 100
-				gain = FREQ_MIN + progress;
-				updateGain();
+				// place within usable range -100 - 0 
+				gate = progress - 100;
+				updateGate(gate);
+				
 			}
 			@Override
 			public void onStartTrackingTouch(SeekBar seekBar) {
@@ -173,7 +153,6 @@ public class MainActivity extends Activity {
 			}
 			
 		});		
-		audioVisualiserView = (AudioVisualiserView) findViewById(R.id.audio_visualiser_view);
 	}
 	
 	@Override
@@ -201,7 +180,15 @@ public class MainActivity extends Activity {
 
 /*
 * Interface controls   
-*/	    	
+*/	  	
+	private void updatePitch(float pitchIn) {
+		// uncertain of values, * 10
+		pitchIn *= 10;
+		if (pitchIn >= hiFrequency) {
+			lastPitch = pitchIn;
+		}
+	}
+	
 	private void updateHiFilter() {
 		hifreqText.setText("hpf: " + Float.toString(hiFrequency));
 		// changed == 0 - 20,000 : step 500		
@@ -209,20 +196,17 @@ public class MainActivity extends Activity {
 			hipassFilter.setFrequency(hiFrequency);
 		}
 	}
-	private void updateShift() {
-		shiftText.setText("shift: " + Float.toString(shifter));
-		if (androidPitchShifter != null) {								
-			androidPitchShifter.setPitchShiftFactor(shifter);
-		}
-	}
-	private void updateGain() {
-		gainText.setText("gain: " + Float.toString(gain));
-		if (gainProcessor != null) {
-			gainProcessor.setGain(gain);
-		}
-	}
 	private void updateGate(double level) {
-		gateText.setText("Threshold gate: " + String.format("%.2f", level));
+		gateText.setText("gate: " + Float.toString(gate));
+		if (thresholdGate != null) {
+			thresholdGate.setThreshold(level);
+		}
+	}
+	private void updateThreshold(double level) {
+		thresholdText.setText("SPL dB: " + String.format("%.2f", level));
+		if (level >= gate) {
+			logger(TAG, "freq thru gate: " + lastPitch);
+		}
 	}
 
 /*
@@ -274,8 +258,8 @@ public class MainActivity extends Activity {
 		
 		// set to defaults
 		hiFrequency = 0;
-		shifter = 1;
-		gain = 50;
+		gate = -80;
+		lastPitch = 0;
 		return true;
 	}
 	
@@ -299,24 +283,7 @@ public class MainActivity extends Activity {
 			logger(TAG, "highpassFilter failed to load.");
 		}
 
-		if (androidPitchShift()) {
-			dispatcher.addAudioProcessor(androidPitchShifter);			
-			logger(TAG, "pitchshift enabled.");
-		}
-		else {
-			logger(TAG, "pitchshift failed to load.");
-		}
-
 //OUPUT	
-
-		if(gainProcess()) {
-			dispatcher.addAudioProcessor(gainProcessor);
-			logger(TAG, "gain added.");
-		}
-		else {
-			logger(TAG, "gain failed to load.");
-		}
-
 		if (thresholdGateProcess()) {
 			dispatcher.addAudioProcessor(thresholdGate);
 			logger(TAG, "threshold gate added.");
@@ -353,14 +320,18 @@ public class MainActivity extends Activity {
 		pdh = new PitchDetectionHandler() {
 			@Override
 			public void handlePitch(PitchDetectionResult result, AudioEvent audioEvent) {
+				final float pitchHz = result.getPitch();
 				final byte[] byteBuffer = audioEvent.getByteBuffer();
 			
 				runOnUiThread(new Runnable() {
 					@Override
 					public void run() {
 						audioVisualiserView.updateVisualiser(byteBuffer);
+						// not sure of range for this var so * 10
+						pitchText.setText("pitch: " + pitchHz * 10);
 						// get the SPL as well
-						updateGate(thresholdGate.currentSPL());
+						updatePitch(pitchHz);
+						updateThreshold(thresholdGate.currentSPL());
 					}
 				});
 			}
@@ -381,62 +352,7 @@ public class MainActivity extends Activity {
 			return false;
 	}
 	
-	private boolean androidPitchShift() {				
-		if (dispatcher != null) {
-			// AudioDispatcher dispatcher, double factor, double sampleRate, int size, int overlap
-			androidPitchShifter = new AndroidPitchShifter(dispatcher, 1, sampleRate, bufferSize, bufferOverlap);
-			if (androidPitchShifter != null) {
-				return true;
-			}
-		}		
-		return false;
-	}	
-	
-	/*
-	private boolean pitchResynthProcess() {
-		pitchResynth = new PitchResyntheziser(sampleRate);
-
-		pdh = new PitchDetectionHandler() {
-			@Override
-			public void handlePitch(PitchDetectionResult result, AudioEvent audioEvent) {
-				//final float pitchInHz = result.getPitch();
-				final byte[] byteBuffer = audioEvent.getByteBuffer();
-			
-				runOnUiThread(new Runnable() {
-					@Override
-					public void run() {
-						//updatePitch(pitchInHz);
-						audioVisualiserView.updateVisualiser(byteBuffer);
-						// get the SPL as well
-						updateGate(thresholdGate.currentSPL());
-					}
-				});
-			}
-		};
-		pitchProcessor = new PitchProcessor(PITCH_ALGORITHM, sampleRate, bufferSize, pitchResynth);
-		
-		if (pitchProcessor != null) 
-			return true;
-		else 
-			return false;
-	}
-	*/
-
-	private boolean gainProcess() {
-		// this is effecting the entire AudioEvent chain, therefore the gate
-		double defaultGain = 50;
-		gainProcessor = new GainProcessor(defaultGain);
-		if (gainProcessor != null) 
-			return true;
-		else 
-			return false;
-	}
-	
-	private boolean androidAudioOutput() {
-		// String audioManager.getProperty(android.media.property.SUPPORT_SPEAKER_NEAR_ULTRASOUND);
-		// : android.media.property.SUPPORT_MIC_NEAR_ULTRASOUND
-		// : android.media.property.SUPPORT_SPEAKER_NEAR_ULTRASOUND
-		
+	private boolean androidAudioOutput() {		
 		audioManager = (AudioManager)getSystemService(Context.AUDIO_SERVICE);
 		
 		if (audioManager.isSpeakerphoneOn()) {

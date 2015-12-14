@@ -42,16 +42,23 @@
         android:textStyle="bold"
         android:text="@string/processing_title" />    
     <TextView
-        android:id="@+id/gate_text"
+        android:id="@+id/threshold_text"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:layout_below="@+id/processing_title"
         android:text="@string/threshold_gate" /> 
+    <TextView
+        android:id="@+id/pitch_text"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_below="@+id/threshold_text"
+        android:text="@string/pitch_text" />
+    
      <TextView
         android:id="@+id/hifreq_text"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:layout_below="@+id/gate_text"
+        android:layout_below="@+id/pitch_text"
         android:layout_centerHorizontal="true" 
         android:textStyle="bold"
         android:text="@string/hifreq_text" />     
@@ -65,38 +72,21 @@
         android:layout_marginTop="8dp" />
      
     <TextView
-        android:id="@+id/shift_text"
+        android:id="@+id/gate_text"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:layout_below="@+id/hi_freq_seek"
         android:layout_centerHorizontal="true" 
         android:textStyle="bold"
-        android:text="@string/shift_text" />     
+        android:text="@string/gate_text" />     
      <SeekBar
-        android:id="@+id/shift_seek"
+        android:id="@+id/gate_seek"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_alignParentStart="true"
         android:layout_alignParentEnd="true"
-        android:layout_below="@+id/shift_text"
-        android:layout_marginTop="8dp" />
- 
-    <TextView
-        android:id="@+id/gain_text"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_below="@+id/shift_seek"
-        android:layout_centerHorizontal="true" 
-        android:textStyle="bold"
-        android:text="@string/gain_text" />     
-     <SeekBar
-        android:id="@+id/gain_seek"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_alignParentStart="true"
-        android:layout_alignParentEnd="true"
-        android:layout_below="@+id/gain_text"
-        android:layout_marginTop="8dp" />     
+        android:layout_below="@+id/gate_text"
+        android:layout_marginTop="8dp" /> 
      
     <View 
         android:id="@+id/hr2"
@@ -104,7 +94,7 @@
         android:layout_marginBottom="8dp"
         android:layout_height="1px" 
         android:layout_width="fill_parent" 
-        android:layout_below="@+id/gain_seek"
+        android:layout_below="@+id/gate_seek"
         android:background="#000000"/> 
     <TextView
         android:id="@+id/visualiser_title"

@@ -7,11 +7,11 @@
     <string name="debug_text">loading</string>
     
     <string name="processing_title">PROCESSING</string>
-    <string name="threshold_gate">Threshold gate</string>
+    <string name="threshold_gate">SPL dB: </string>
     
-    <string name="hifreq_text">hpf:</string>
-    <string name="shift_text">shift:</string>
-    <string name="gain_text">gain:</string>
+    <string name="hifreq_text">hpf: 18500.0</string>
+    <string name="gate_text">gate: -80.0</string>
+    <string name="pitch_text">pitch: -1.0</string>
    
     
     <string name="visualiser_title">VISUALISER</string>
