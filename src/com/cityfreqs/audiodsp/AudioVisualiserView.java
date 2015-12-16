@@ -16,7 +16,7 @@ public class AudioVisualiserView extends View {
 	private Paint mForePaint = new Paint();
 	
 	private static final int MULTIPLIER = 4; // 4
-	private static final int RANGE = 256; // 128
+	private static final int RANGE = 256; // 128, 256
 	
 	public AudioVisualiserView(Context context) {
 		super(context);
@@ -55,13 +55,13 @@ public class AudioVisualiserView extends View {
 			mPoints = new float[mBytes.length * MULTIPLIER];
 		}
 		mRect.set(0, 0, getWidth(), getHeight());
-		for (int i = 0; i < mBytes.length - 1; i++) {
+		for (int i = 0; i < mBytes.length - 1; i += 2) {
 			mPoints[i * MULTIPLIER] = mRect.width() * i / (mBytes.length - 1);
 			mPoints[i * MULTIPLIER + 1] = mRect.height() / 2 + ((byte) (mBytes[i] + RANGE)) * (mRect.height() / 2) / RANGE;
 			mPoints[i * MULTIPLIER + 2] = mRect.width() * (i + 1) / (mBytes.length - 1);
-			mPoints[i * MULTIPLIER + 3] = mRect.height() / 2 + ((byte) (mBytes[i + 1] + RANGE)) * (mRect.height() / 2) / RANGE;	
+			mPoints[i * MULTIPLIER + 3] = mRect.height() / 2 + ((byte) (mBytes[i + 1] + RANGE)) * (mRect.height() / 2) / RANGE;
 		}
-		canvas.drawLines(mPoints,  mForePaint);
+		canvas.drawLines(mPoints, mForePaint);
 	}
 	
 }

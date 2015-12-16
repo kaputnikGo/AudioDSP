@@ -3,7 +3,6 @@
     <string name="app_name">AudioDSP</string>
     <string name="action_settings">Settings</string>
     
-    <string name="debug_title">DEBUG</string>
     <string name="debug_text">loading</string>
     
     <string name="processing_title">PROCESSING</string>
@@ -13,6 +12,7 @@
     <string name="gate_text">gate: -80.0</string>
     <string name="pitch_text">pitch: -1.0</string>
    
+    <string name="record_button_text">RECORD</string>
     
     <string name="visualiser_title">VISUALISER</string>
 </resources>

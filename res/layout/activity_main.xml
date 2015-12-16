@@ -6,39 +6,23 @@
     android:paddingRight="@dimen/activity_horizontal_margin"
     android:paddingTop="@dimen/activity_vertical_margin"
     tools:context="com.cityfreqs.audiodsp.MainActivity" xmlns:android="http://schemas.android.com/apk/res/android">
-
-    <TextView
-        android:id="@+id/debug_title_text"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_centerHorizontal="true"
-        android:textStyle="bold"
-        android:text="@string/debug_title" />
+    
     <TextView
         android:id="@+id/debug_text"
         android:layout_width="match_parent"
         android:layout_height="120dp"
-        android:layout_below="@+id/debug_title_text"
-        android:scrollbars = "vertical"
         android:gravity="bottom"
+        android:scrollbars="vertical"
         android:background="#000000"
         android:textColor="#00ff00"
         android:text="@string/debug_text" />
-       
-    <View 
-        android:id="@+id/hr1"
-        android:layout_marginTop="20dp"
-        android:layout_marginBottom="8dp"
-        android:layout_height="1px" 
-        android:layout_width="fill_parent" 
-        android:layout_below="@+id/debug_text"
-        android:background="#000000"/>
+
     <TextView
         android:id="@+id/processing_title"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:layout_centerHorizontal="true"
-        android:layout_below="@+id/hr1" 
+        android:layout_below="@+id/debug_text" 
         android:textStyle="bold"
         android:text="@string/processing_title" />    
     <TextView
@@ -86,7 +70,14 @@
         android:layout_alignParentStart="true"
         android:layout_alignParentEnd="true"
         android:layout_below="@+id/gate_text"
-        android:layout_marginTop="8dp" /> 
+        android:layout_marginTop="8dp" />
+     
+     <Button
+        android:id="@+id/record_button"
+        android:layout_width="fill_parent"
+        android:layout_height="wrap_content"
+        android:layout_below="@+id/gate_seek"
+        android:text="@string/record_button_text" /> 
      
     <View 
         android:id="@+id/hr2"
@@ -94,21 +85,13 @@
         android:layout_marginBottom="8dp"
         android:layout_height="1px" 
         android:layout_width="fill_parent" 
-        android:layout_below="@+id/gate_seek"
+        android:layout_below="@+id/record_button"
         android:background="#000000"/> 
-    <TextView
-        android:id="@+id/visualiser_title"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_centerHorizontal="true"
-        android:layout_below="@+id/hr2" 
-        android:textStyle="bold"
-        android:text="@string/visualiser_title" />
           
     <com.cityfreqs.audiodsp.AudioVisualiserView
         android:id="@+id/audio_visualiser_view"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
-        android:layout_below="@+id/visualiser_title" />
+        android:layout_below="@+id/hr2" />
     
 </RelativeLayout>
