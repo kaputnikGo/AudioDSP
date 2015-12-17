@@ -1,8 +1,9 @@
 # AudioDSP
-Testing app for the use of https://github.com/JorenSix/TarsosDSP
+Testing app for the use of [TarsosDSP](https://github.com/JorenSix/TarsosDSP)
 
-in recording near-ultra frequency sound waves (18.5kHz - 20kHz)
-part of ongoing research projects by http://cityfreqs.com.au/
+Purpose: recording near-ultra frequency sound waves (18.5kHz - 20kHz)
+
+Part of ongoing research projects by [City Frequencies](http://cityfreqs.com.au/)
 
 
 	 * - vers. 1.0
