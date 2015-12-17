@@ -37,24 +37,26 @@ public class AndroidWriteProcessor implements AudioProcessor {
     public boolean RECORDING;
     private boolean ready;
     
-    public AndroidWriteProcessor(Context context, String filename) {	
+    public AndroidWriteProcessor(Context context, TarsosDSPAudioFormat audioFormat, String filename) {	
+    	this.audioFormat = audioFormat;
+    	
     	ourIntDirectory = context.getFilesDir();
-
     	// need to add correct file ext here (.wav ?)
     	this.filename = filename + FILE_EXTENSION;
     	
     	// prepare the default file save location here
     	if (isExternalStorageWritable()) {
     		if (createOurDirectory()) {
-    			log("External storage ready, prep file...");
+    			log("Ext storage ready, prep file...");
     			prepareOutputFile();
     		}
     	}
     	else {
     		// prepare the internal
-    		log("Internal storage only, prep file...");
+    		log("Int storage only, prep file...");
     		prepareOutputFile();
     	}
+    	// need to create audioFormat...
     }
        
     public AndroidWriteProcessor(TarsosDSPAudioFormat audioFormat, RandomAccessFile output) {
@@ -201,7 +203,9 @@ public class AndroidWriteProcessor implements AudioProcessor {
     
 /*********************************************************************************
  * inherited methods
- */      
+ */
+    
+    // do not call UI thread writes here...
     @Override
     public boolean process(AudioEvent audioEvent) {
         if (RECORDING) {
@@ -212,7 +216,7 @@ public class AndroidWriteProcessor implements AudioProcessor {
 	        } 
 	        catch (IOException e) {
 	            e.printStackTrace();
-	            log("recording fail.");
+	            //log("recording fail.");
 	        }
 	        return true;
         }
@@ -238,11 +242,11 @@ public class AndroidWriteProcessor implements AudioProcessor {
 		        output.seek(0);
 		        output.write(header.toByteArray());
 		        output.close();
-		        log("Recording write finished.");
+		        //log("Recording write finished.");
 		    }
 		    catch (IOException e){
 		        e.printStackTrace();
-		        log("Recording write fail.");
+		        //log("Recording write fail.");
 		    }
 		    RECORDING = false;
     	}

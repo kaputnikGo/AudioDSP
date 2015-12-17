@@ -291,12 +291,6 @@ public class MainActivity extends Activity {
 		hiFreqGate = 18500;
 		gate = -80;
 		lastPitch = 18500;
-		
-		// add AndroidWriteProcessor init here
-		//TODO
-		androidWriteProcessor = new AndroidWriteProcessor(this, "test");
-		// this should return enough info so far.	
-		
 		return true;
 	}
 	
@@ -328,7 +322,16 @@ public class MainActivity extends Activity {
 			logger(TAG, "threshold gate failed to load.");
 		}
 	
-//OUPUT
+//OUPUT	
+		
+		if (androidWriteProcess()) {
+			dispatcher.addAudioProcessor(androidWriteProcessor);
+			logger(TAG, "write processor added.");
+		}
+		else {
+			logger(TAG, "write processor failed to load.");
+		}
+		
 		if (androidAudioOutput()) {
 			dispatcher.addAudioProcessor(androidAudioOut);
 			logger(TAG, "android output added.");
@@ -388,6 +391,25 @@ public class MainActivity extends Activity {
 			return false;
 	}
 	
+	private boolean androidWriteProcess() {
+		// this always (req. androidAudioOutput):
+		tarsosAudioFormat = new TarsosDSPAudioFormat(
+    			sampleRate, 
+    			encoding, 
+    			channel, 
+    			true, // signed 
+    			false); // bigEndian
+		
+		// then:
+		androidWriteProcessor = new AndroidWriteProcessor(this, tarsosAudioFormat, "test");
+		if (androidWriteProcessor != null) {
+			logger(TAG, androidWriteProcessor.getFreeSpace(this));
+			return true;
+		}
+		else
+			return false;
+	}
+	
 	private boolean androidAudioOutput() {		
 		audioManager = (AudioManager)getSystemService(Context.AUDIO_SERVICE);
 		
@@ -399,13 +421,6 @@ public class MainActivity extends Activity {
 		else {
 			logger(TAG, "headphones in use.");
 		}
-		
-		tarsosAudioFormat = new TarsosDSPAudioFormat(
-    			sampleRate, 
-    			encoding, 
-    			channel, 
-    			true, // signed 
-    			false); // bigEndian
     			
 		androidAudioOut = new AndroidAudioOut(
 				tarsosAudioFormat, 
