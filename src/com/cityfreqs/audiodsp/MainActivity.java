@@ -45,8 +45,7 @@ public class MainActivity extends Activity {
 	// freq range to seek: 18.5kHz - 20kHz
 	
 	// add a file write mechanism for candidate 18.5+ grabs
-	// manual record as well as gate triggered
-	
+	// manual record as well as gate triggered	
 	
 	private static final String TAG = "AudioDSP";
 	private static final boolean DEBUG = true;
@@ -480,6 +479,26 @@ public class MainActivity extends Activity {
 		return 20.0 * Math.log10(value);
 	}
 	*/
+	
+	//TODO
+	public void ringMod(final Byte[] input) {
+		// for frequency shift:
+		// f - input signal
+		// g - carrier
+		// h - output
+		// as a Processor...
+		
+		Byte[] output = new Byte[input.length];
+		
+		// needs to be a 10000hZ sine wave
+		Byte[] carrier = new Byte[input.length];
+		
+		// h[i] = f[i] * g[i], for all i
+		for (int i = 0; i < input.length; i++) {
+			// prob division here..., or * 0.00001
+			output[i] = (byte) (input[i] * carrier[i]);
+		}
+	}
 	
 	// only for querying a device, 
 	// TarsosDSP sets its own AudioRecord object
