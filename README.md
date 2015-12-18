@@ -10,7 +10,12 @@ Part of ongoing research projects by [City Frequencies](http://cityfreqs.com.au/
 	 * - min/target API 18 - 4.3
 	 * - S4 4.3.1 (18) - testing use
 	 * - s5 5.1.1 (22) - install only
-	 	 
+
+## TODO:
+1. add file read -> playback
+2  add file read -> frequency shift -> playback
+3. add audio in -> frequency shift -> audio out
+4. add auto-record from threshold and hpf gate via background service 
 
 # License
 

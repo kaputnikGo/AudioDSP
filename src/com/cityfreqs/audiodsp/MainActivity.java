@@ -16,6 +16,7 @@ import be.tarsos.dsp.pitch.PitchProcessor.PitchEstimationAlgorithm;
 import android.app.Activity;
 import android.content.Context;
 import android.content.Intent;
+import android.graphics.Color;
 import android.hardware.usb.UsbDevice;
 import android.hardware.usb.UsbManager;
 import android.media.AudioFormat;
@@ -167,6 +168,7 @@ public class MainActivity extends Activity {
 			
 		});
 		
+		// change the look of this button to indicate state		
 		recordButton = (Button) findViewById(R.id.record_button);
 		recordButton.setOnClickListener(new View.OnClickListener() {
             public void onClick(View v) {
@@ -228,13 +230,16 @@ public class MainActivity extends Activity {
 	}
 	
 	private void toggleRecording() {
-		//TODO
 		if (androidWriteProcessor != null) {
 			if (androidWriteProcessor.RECORDING) {
 				androidWriteProcessor.stopRecording();
+				recordButton.setText("RECORD");
+				recordButton.setBackgroundColor(Color.LTGRAY);
 			}
 			else {
 				androidWriteProcessor.startRecording();
+				recordButton.setText("RECORDING...");
+				recordButton.setBackgroundColor(Color.RED);
 			}
 		}
 	}
@@ -400,7 +405,7 @@ public class MainActivity extends Activity {
     			false); // bigEndian
 		
 		// then:
-		androidWriteProcessor = new AndroidWriteProcessor(this, tarsosAudioFormat, "test");
+		androidWriteProcessor = new AndroidWriteProcessor(this, tarsosAudioFormat, "capture");
 		if (androidWriteProcessor != null) {
 			logger(TAG, androidWriteProcessor.getFreeSpace(this));
 			return true;

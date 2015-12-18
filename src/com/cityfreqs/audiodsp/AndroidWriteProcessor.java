@@ -8,6 +8,9 @@ import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.io.RandomAccessFile;
+import java.text.SimpleDateFormat;
+import java.util.Date;
+import java.util.Locale;
 
 import android.content.Context;
 import android.os.Environment;
@@ -18,6 +21,9 @@ import be.tarsos.dsp.writer.WaveHeader;
 
 public class AndroidWriteProcessor implements AudioProcessor {
 	// ready this for android file saving
+	// TODO
+	// file size checks/warnings as recording
+	// storage capacity checks/warnings pre-record
 	
 	private static final String TAG = "AudioDSP-recorder";
     RandomAccessFile output;
@@ -27,12 +33,14 @@ public class AndroidWriteProcessor implements AudioProcessor {
     
     private File ourIntDirectory; 
     private String filename;
+    private String sessionFilename; // base filename
     private File outputFile;
   
     private boolean ext_capable = false;
     private File ourExtDirectory;
     private static final String OUR_DIRECTORY = "AudioDSP";
     private static final String FILE_EXTENSION = ".wav";
+    private static final SimpleDateFormat TIMESTAMP_FORMAT = new SimpleDateFormat("yyyyMMddhhmmss", Locale.ENGLISH);
     
     public boolean RECORDING;
     private boolean ready;
@@ -41,8 +49,8 @@ public class AndroidWriteProcessor implements AudioProcessor {
     	this.audioFormat = audioFormat;
     	
     	ourIntDirectory = context.getFilesDir();
-    	// need to add correct file ext here (.wav ?)
-    	this.filename = filename + FILE_EXTENSION;
+    	this.filename = filename; // in case
+    	sessionFilename = filename;
     	
     	// prepare the default file save location here
     	if (isExternalStorageWritable()) {
@@ -73,7 +81,8 @@ public class AndroidWriteProcessor implements AudioProcessor {
   *  public methods  
   */
     public void setFileName(String filename) {
-    	this.filename = filename;
+    	this.filename = filename; // in case
+    	sessionFilename = filename;
     }
     
     public boolean readyRecording() {
@@ -99,8 +108,6 @@ public class AndroidWriteProcessor implements AudioProcessor {
     	if (RECORDING) {
     		processingFinished();
     		log("...STOPPED.");
-    		// does this mean process() is still running?
-    		// will it need calling again at prepare?
     	}
     }
     
@@ -133,8 +140,8 @@ public class AndroidWriteProcessor implements AudioProcessor {
       
     private boolean prepareOutputFile() {
     	// shouldn't get this, but...
-    	if (filename == "" || filename == null) {
-    		log("No filename set error.");
+    	if (sessionFilename == "" || sessionFilename == null) {
+    		log("No session filename set error.");
     		return false;
     	}
     	// need to build the filename AND path
@@ -143,6 +150,10 @@ public class AndroidWriteProcessor implements AudioProcessor {
     		log("Error getting storage directory");
     		return false;
     	}
+    	// add the extension and timestamp
+    	// eg: 20151218101432-capture.wav
+    	filename = getTimestamp() + "-" + sessionFilename + FILE_EXTENSION;
+    	
     	// file save will overwrite unless new name is used...
     	try {
     		outputFile = new File(location, filename);
@@ -168,8 +179,8 @@ public class AndroidWriteProcessor implements AudioProcessor {
     // included if TarsosDSP method not suitable
     public void altWriteToFile(byte[] audioArray) {
     	// shouldn't get this, but...
-    	if (filename == "" || filename == null) {
-    		log("No filename set error.");
+    	if (sessionFilename == "" || sessionFilename == null) {
+    		log("No session filename set error.");
     		return;
     	}
     	// need to build the filename AND path
@@ -178,6 +189,10 @@ public class AndroidWriteProcessor implements AudioProcessor {
     		log("Error getting storage directory");
     		return;
     	}
+    	// add the extension and timestamp
+    	// eg: 20151218101432-capture.wav
+    	filename = getTimestamp() + "-" + sessionFilename + FILE_EXTENSION;
+    	
     	// file save will overwrite unless new name is used...
     	try {
     		outputFile = new File(location, filename);
@@ -249,12 +264,23 @@ public class AndroidWriteProcessor implements AudioProcessor {
 		        //log("Recording write fail.");
 		    }
 		    RECORDING = false;
+		    resetForNextRecording();
     	}
     }
     
 /*********************************************************************************
  * utilities     
  */
+    private void resetForNextRecording() {
+    	// called by processingFinished, prepare new output file with new timestamp
+    	if (prepareOutputFile()) {
+    		log("Output file reset: " + filename);
+    	}
+    	else {
+    		// some error in readying the output file
+    		log("Output file reset error.");
+    	}
+    }
     private boolean isExternalStorageWritable() {
     	// is available for read and write
     	if (Environment.MEDIA_MOUNTED.equals(Environment.getExternalStorageState())) {
@@ -301,6 +327,12 @@ public class AndroidWriteProcessor implements AudioProcessor {
     	}
     	log("Ext storage not available.");
     	return false;
+    }
+    
+    private String getTimestamp() {
+    	// for adding to default file save name
+    	// eg: 20151218101432
+    	return TIMESTAMP_FORMAT.format(new Date());
     }
     
     private void log(String message) {
