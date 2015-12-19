@@ -40,7 +40,7 @@ public class AndroidWriteProcessor implements AudioProcessor {
     private File ourExtDirectory;
     private static final String OUR_DIRECTORY = "AudioDSP";
     private static final String FILE_EXTENSION = ".wav";
-    private static final SimpleDateFormat TIMESTAMP_FORMAT = new SimpleDateFormat("yyyyMMddhhmmss", Locale.ENGLISH);
+    private static final SimpleDateFormat TIMESTAMP_FORMAT = new SimpleDateFormat("yyyyMMdd-HH:mm:ss", Locale.ENGLISH);
     
     public boolean RECORDING;
     private boolean ready;
@@ -151,7 +151,7 @@ public class AndroidWriteProcessor implements AudioProcessor {
     		return false;
     	}
     	// add the extension and timestamp
-    	// eg: 20151218101432-capture.wav
+    	// eg: 20151218101432-capture.wav (24h)
     	filename = getTimestamp() + "-" + sessionFilename + FILE_EXTENSION;
     	
     	// file save will overwrite unless new name is used...
@@ -190,7 +190,7 @@ public class AndroidWriteProcessor implements AudioProcessor {
     		return;
     	}
     	// add the extension and timestamp
-    	// eg: 20151218101432-capture.wav
+    	// eg: 20151218101432-capture.wav (24h)
     	filename = getTimestamp() + "-" + sessionFilename + FILE_EXTENSION;
     	
     	// file save will overwrite unless new name is used...

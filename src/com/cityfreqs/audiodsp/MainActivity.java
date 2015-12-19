@@ -16,6 +16,7 @@ import be.tarsos.dsp.pitch.PitchProcessor.PitchEstimationAlgorithm;
 import android.app.Activity;
 import android.content.Context;
 import android.content.Intent;
+import android.content.SharedPreferences;
 import android.graphics.Color;
 import android.hardware.usb.UsbDevice;
 import android.hardware.usb.UsbManager;
@@ -24,6 +25,9 @@ import android.media.AudioManager;
 import android.media.AudioRecord;
 import android.media.MediaRecorder.AudioSource;
 import android.os.Bundle;
+import android.os.PowerManager;
+import android.os.PowerManager.WakeLock;
+import android.preference.PreferenceManager;
 import android.text.method.ScrollingMovementMethod;
 import android.util.Log;
 import android.view.Gravity;
@@ -50,6 +54,10 @@ public class MainActivity extends Activity {
 	
 	private static final String TAG = "AudioDSP";
 	private static final boolean DEBUG = true;
+	
+	private WakeLock wakeLock;
+	private PowerManager pm;
+	private SharedPreferences sharedPrefs;
 	
 	private Thread audioThread;
 	private AudioDispatcher dispatcher;
@@ -99,6 +107,9 @@ public class MainActivity extends Activity {
 	private static final int DEFAULT_CHANNEL = AudioFormat.CHANNEL_OUT_DEFAULT;
 	private static final int SAM5_BUFFER = 7680;
 	
+	private static final int DEFAULT_FREQ = 37;
+	private static final int DEFAULT_GATE = 20;
+	
 	private static final PitchEstimationAlgorithm PITCH_ALGORITHM = PitchEstimationAlgorithm.FFT_YIN;
 		
 	// USB
@@ -108,7 +119,11 @@ public class MainActivity extends Activity {
 	@Override
 	protected void onCreate(Bundle savedInstanceState) {
 		super.onCreate(savedInstanceState);
-		setContentView(R.layout.activity_main);		
+		setContentView(R.layout.activity_main);
+		
+		pm = (PowerManager) this.getSystemService(Context.POWER_SERVICE);
+		sharedPrefs = PreferenceManager.getDefaultSharedPreferences(this);
+		
 		debugText = (TextView) findViewById(R.id.debug_text);
 		debugText.setMovementMethod(new ScrollingMovementMethod());
 		debugText.setOnClickListener(new TextView.OnClickListener() {
@@ -127,7 +142,7 @@ public class MainActivity extends Activity {
 		hifreqText = (TextView) findViewById(R.id.hifreq_text);
 		hiFreqSeekBar = (SeekBar) findViewById(R.id.hi_freq_seek);
 		hiFreqSeekBar.setMax(42);
-		hiFreqSeekBar.setProgress(37);
+		hiFreqSeekBar.setProgress(DEFAULT_FREQ);
 		hiFreqSeekBar.setOnSeekBarChangeListener(new OnSeekBarChangeListener() {
 			@Override
 			public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
@@ -148,7 +163,7 @@ public class MainActivity extends Activity {
 		gateText = (TextView) findViewById(R.id.gate_text);
 		gateSeekBar = (SeekBar) findViewById(R.id.gate_seek);
 		gateSeekBar.setMax(100);
-		gateSeekBar.setProgress(20); // -80dB
+		gateSeekBar.setProgress(DEFAULT_GATE); // -80dB
 		gateSeekBar.setOnSeekBarChangeListener(new OnSeekBarChangeListener() {
 			@Override
 			public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
@@ -175,22 +190,60 @@ public class MainActivity extends Activity {
                 toggleRecording();
             }
         });
+		
+		// save settings to sharedPrefs
+		SharedPreferences.Editor editor = sharedPrefs.edit();
+		editor.putInt("freq", DEFAULT_FREQ);
+		editor.putInt("gate", DEFAULT_GATE);
+		editor.commit();
 	}
 	
 	@Override
 	protected void onResume() {
 		super.onResume();
-		if (prepareAudio()) {
-			dispatcherEnable();
+		if (wakeLock != null && wakeLock.isHeld()) {
+			// do nothing, we are recording...			
 		}
 		else {
-			logger(TAG, "prepare audio fail.");
+			if (prepareAudio()) {
+				dispatcherEnable();
+			}
+			else {
+				logger(TAG, "prepare audio fail.");
+			}
 		}
+		// get settings from sharedPrefs
+		hiFreqSeekBar.setProgress(sharedPrefs.getInt("freq", DEFAULT_FREQ));
+		gateSeekBar.setProgress(sharedPrefs.getInt("gate", DEFAULT_GATE));
 	}
 	
 	@Override
 	protected void onPause() {
 		super.onPause();
+		if (wakeLock != null && wakeLock.isHeld()) {
+			//TODO
+			// do nothing, we are recording...
+			// this is a fudge until we get background services recording enabled.			
+		}		
+		else {		
+			if (audioThread != null && audioThread.isAlive()) {
+				audioThread.interrupt();
+			}
+			if (dispatcher != null) {
+				dispatcher.stop();
+				dispatcher = null;
+			}			
+		}
+		// save settings to sharedPrefs
+		SharedPreferences.Editor editor = sharedPrefs.edit();
+		editor.putInt("freq", hiFreqSeekBar.getProgress());
+		editor.putInt("gate", gateSeekBar.getProgress());
+		editor.commit();
+	}
+	
+	@Override
+	protected void onDestroy() {
+		super.onDestroy();
 		if (audioThread != null && audioThread.isAlive()) {
 			audioThread.interrupt();
 		}
@@ -230,16 +283,23 @@ public class MainActivity extends Activity {
 	}
 	
 	private void toggleRecording() {
+        wakeLock = pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, TAG); 
+	
 		if (androidWriteProcessor != null) {
 			if (androidWriteProcessor.RECORDING) {
 				androidWriteProcessor.stopRecording();
 				recordButton.setText("RECORD");
 				recordButton.setBackgroundColor(Color.LTGRAY);
+				if (wakeLock.isHeld()) {
+				    wakeLock.release();
+				    wakeLock = null;
+				}
 			}
 			else {
 				androidWriteProcessor.startRecording();
 				recordButton.setText("RECORDING...");
 				recordButton.setBackgroundColor(Color.RED);
+				wakeLock.acquire();
 			}
 		}
 	}
@@ -291,10 +351,10 @@ public class MainActivity extends Activity {
 		logger(TAG, "bufferSize set: " + bufferSize);		
 		logger(TAG, "bufferOverlap set: " + bufferOverlap);
 		
-		// set to defaults
-		hiFreqGate = 18500;
-		gate = -80;
-		lastPitch = 18500;
+		// set from seekbars set by sharedPrefs
+		hiFreqGate = hiFreqSeekBar.getProgress() * FREQ_STEP;
+		gate = gateSeekBar.getProgress() - 100;
+		lastPitch = gate;
 		return true;
 	}
 	
@@ -484,27 +544,6 @@ public class MainActivity extends Activity {
 		return 20.0 * Math.log10(value);
 	}
 	*/
-	
-	//TODO
-	public void ringMod(final Byte[] input) {
-		// for frequency shift:
-		// f - input signal
-		// g - carrier
-		// h - output
-		// as a Processor...
-		
-		Byte[] output = new Byte[input.length];
-		
-		// needs to be a 10000hZ sine wave
-		Byte[] carrier = new Byte[input.length];
-		
-		// h[i] = f[i] * g[i], for all i
-		for (int i = 0; i < input.length; i++) {
-			// prob division here..., or * 0.00001
-			output[i] = (byte) (input[i] * carrier[i]);
-		}
-	}
-	
 	// only for querying a device, 
 	// TarsosDSP sets its own AudioRecord object
 	private boolean determineAudioType() {
