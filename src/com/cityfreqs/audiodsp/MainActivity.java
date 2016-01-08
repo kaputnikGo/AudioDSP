@@ -8,14 +8,12 @@ import be.tarsos.dsp.AudioEvent;
 import be.tarsos.dsp.filters.HighPass;
 import be.tarsos.dsp.filters.IIRFilter;
 import be.tarsos.dsp.io.TarsosDSPAudioFormat;
-import be.tarsos.dsp.io.android.AudioDispatcherFactory;
 import be.tarsos.dsp.pitch.PitchDetectionHandler;
 import be.tarsos.dsp.pitch.PitchDetectionResult;
 import be.tarsos.dsp.pitch.PitchProcessor;
 import be.tarsos.dsp.pitch.PitchProcessor.PitchEstimationAlgorithm;
 import android.app.Activity;
 import android.content.Context;
-import android.content.Intent;
 import android.content.SharedPreferences;
 import android.graphics.Color;
 import android.hardware.usb.UsbDevice;
@@ -206,7 +204,7 @@ public class MainActivity extends Activity {
 		}
 		else {
 			if (prepareAudio()) {
-				dispatcherEnable();
+				dispatcherLoadProcesses();
 			}
 			else {
 				logger(TAG, "prepare audio fail.");
@@ -291,7 +289,7 @@ public class MainActivity extends Activity {
 				recordButton.setText("RECORD");
 				recordButton.setBackgroundColor(Color.LTGRAY);
 				if (wakeLock.isHeld()) {
-				    wakeLock.release();
+				    wakeLock.release(); // this
 				    wakeLock = null;
 				}
 			}
@@ -331,9 +329,31 @@ public class MainActivity extends Activity {
 * Audio processing   
 */	
 	private boolean prepareAudio() {
-		logger(TAG, "prepareAudio...");				
-		if (determineAudioType()) {
-			// wait for it...
+		logger(TAG, "prepareAudio...");
+		
+		//TODO
+		// need to step in here with usb audio search.
+		if (scanUsbDevices()) {
+			logger(TAG, "found usb device(s), find audio type...");
+			// have found suitable device, use its audio capabilities
+			if (determineUsbAudioType()) {
+				// have found, need to get TarsosDSP to use...
+				// set dispatcher to usb
+				dispatcher = AndroidDispatcherFactory.fromUsbMicrophone(sampleRate, bufferSize, 0);	
+				logger(TAG, "dispatcher set to USB audio.");
+				return true;
+			}
+			else {
+				logger(TAG, "Error: can't determine USB audio type.");
+			}
+		}
+		else {
+			logger(TAG, "USB Scanning found no device(s).");
+		}
+		
+		logger(TAG, "Scanning for internal audio...");
+		if (determineInternalAudioType()) {
+			// looking for system audio, wait for it...
 		}
 		else {
 			logger(TAG, "Error determining audio type, set defaults");
@@ -355,12 +375,15 @@ public class MainActivity extends Activity {
 		hiFreqGate = hiFreqSeekBar.getProgress() * FREQ_STEP;
 		gate = gateSeekBar.getProgress() - 100;
 		lastPitch = gate;
+		
+		// set dispatcher to internal audio
+		dispatcher = AndroidDispatcherFactory.fromDefaultMicrophone(sampleRate, bufferSize, 0);		
 		return true;
 	}
 	
-	private void dispatcherEnable() {
-		dispatcher = AudioDispatcherFactory.fromDefaultMicrophone(sampleRate, bufferSize, 0);
-
+	
+	
+	private void dispatcherLoadProcesses() {
 //PROCESSES
 		if (pitchInProcess()) {
 			dispatcher.addAudioProcessor(pitchProcessor);
@@ -477,6 +500,7 @@ public class MainActivity extends Activity {
 	private boolean androidAudioOutput() {		
 		audioManager = (AudioManager)getSystemService(Context.AUDIO_SERVICE);
 		
+		//TODO this does not appear to be working...
 		if (audioManager.isSpeakerphoneOn()) {
 			// do not allow output at the moment
 			logger(TAG, "headphones needed!");
@@ -504,7 +528,7 @@ public class MainActivity extends Activity {
 	// http://developer.android.com/guide/topics/connectivity/usb/host.html
 	// SDR device driver: http://sdr.osmocom.org/trac/
 	
-
+	/*
 	private boolean getIntentUsbDevice(Intent intent) {
 		// the device_filter.xml has a hardcoded usb device declaration
 		// update it to the SDR when it gets here...
@@ -512,22 +536,29 @@ public class MainActivity extends Activity {
 		deviceContainer.setUsbDevice((UsbDevice) intent.getParcelableExtra(UsbManager.EXTRA_DEVICE));
 		return (deviceContainer.hasDevice() != false);
 	}
+	*/
 	
-	private void populateUsbDevices() {
-		// the device_filter.xml has a hardcoded usb device declaration
-		// update it to the SDR when it gets here...
+	private boolean scanUsbDevices() {
+		// search for any attached usb devices that we can read properties,
+		// create a DeviceContainer for them.
+		//TODO
+		logger(TAG, "scanning usb for audio device(s)...");
 		usbManager = (UsbManager) getSystemService(Context.USB_SERVICE);
 		HashMap<String, UsbDevice> deviceList = usbManager.getDeviceList();
 		Iterator<UsbDevice> deviceIterator = deviceList.values().iterator();
-
-		int i = 0;
-		DeviceContainer[] devices = new DeviceContainer[deviceList.size()];
+		
+		boolean found = false;
+		//int i = 0;
+		//deviceContainer = new DeviceContainer();
 		
 		while(deviceIterator.hasNext()) {			
 			UsbDevice device = deviceIterator.next();
-			devices[i] = new DeviceContainer(device);
-			i++;
+			deviceContainer = new DeviceContainer(device);
+			found = true;
+			logger(TAG, "USB: " + deviceContainer.toString());
+			//i++;
 		}
+		return found;
 	}
 
 	
@@ -544,9 +575,10 @@ public class MainActivity extends Activity {
 		return 20.0 * Math.log10(value);
 	}
 	*/
+	
 	// only for querying a device, 
 	// TarsosDSP sets its own AudioRecord object
-	private boolean determineAudioType() {
+	private boolean determineInternalAudioType() {
 	    for (int rate : SAMPLE_RATES) {
 	        for (short audioFormat : new short[] { 
 	        		AudioFormat.ENCODING_PCM_16BIT,
@@ -588,6 +620,58 @@ public class MainActivity extends Activity {
 	            }
 	        }
 	    }
+	    logger(TAG, "determine audioRecord failure.");
+	    return false;
+	}
+	
+	private boolean determineUsbAudioType() {
+		if (deviceContainer.hasDevice()) {
+			for (int rate : SAMPLE_RATES) {
+		        for (short audioFormat : new short[] { 
+		        		AudioFormat.ENCODING_PCM_16BIT,
+		        		AudioFormat.ENCODING_PCM_8BIT }) {
+		        	
+		            for (short channelConfig : new short[] { 
+		            		AudioFormat.CHANNEL_IN_DEFAULT, // this reports as working, 0x1
+		            		AudioFormat.CHANNEL_IN_MONO, 
+		            		AudioFormat.CHANNEL_IN_STEREO }) {
+		                try {
+		                    logger(TAG, "USB - try rate " + rate + "Hz, bits: " + audioFormat + ", channel: "+ channelConfig);
+		                    
+		                    int buffSize = AudioRecord.getMinBufferSize(rate, channelConfig, audioFormat);
+		                    if (buffSize != AudioRecord.ERROR_BAD_VALUE) {
+		                        // check if we can instantiate and have a success
+		                        AudioRecord recorder = new AudioRecord(
+		                        		AudioSource.DEFAULT, 
+		                        		rate, 
+		                        		channelConfig, 
+		                        		audioFormat, 
+		                        		buffSize);
+	
+		                        if (recorder.getState() == AudioRecord.STATE_INITIALIZED) {
+		                        	logger(TAG, "USB - found, rate: " + rate + ", min-buff: " + buffSize);
+		                        	// set our values
+		                        	sampleRate = rate;
+		                        	channel = channelConfig;
+		                        	encoding = audioFormat;
+		                        	bufferSize = buffSize;
+		                        	recorder.release();
+		                        	recorder = null;
+		                            return true;
+		                        }
+		                    }
+		                } 
+		                catch (Exception e) {
+		                    logger(TAG, "Rate: " + rate + "Exception, keep trying, e:" + e.toString());
+		                }
+		            }
+		        }
+		    }
+		}
+		else {
+		    logger(TAG, "Error: USB device container has no device.");
+		    return false;
+		}
 	    logger(TAG, "determine audioRecord failure.");
 	    return false;
 	}
