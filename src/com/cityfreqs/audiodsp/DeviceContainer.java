@@ -133,7 +133,7 @@ public class DeviceContainer {
 	 *  
 	 *  Capture
 	 *  	Status: Stop
-	 *  	Interface 2
+	 *  		Interface 2
 	 *  		Altset 1
 	 *  		Format: S16_LE
 	 *  		Channels: 1

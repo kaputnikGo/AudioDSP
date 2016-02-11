@@ -51,6 +51,7 @@ public class MainActivity extends Activity {
 	// manual record as well as gate triggered	
 	
 	private static final String TAG = "AudioDSP";
+	private static final String VERSION = "1.2";
 	private static final boolean DEBUG = true;
 	
 	private WakeLock wakeLock;
@@ -692,6 +693,9 @@ public class MainActivity extends Activity {
     	if (DEBUG) {
     		debugText.append("\n" + tag + ": " + message);
     		Log.d(tag, message);
-    	}    	
+    	} 
+    	else {
+    		Log.d(tag, "CFP Recorder ver: " + VERSION);
+    	}
     }
 }

@@ -37,23 +37,19 @@ public class AndroidDispatcherFactory {
 	}
 
 	public static AudioDispatcher fromUsbMicrophone(final int sampleRate, final int audioBufferSize, final int bufferOverlap) {
-		// TODO
-		// get this to work with stereo in...?
-		// unless AudioProcessor.class only works in mono...
-		// Android *should* re-route audio to usb automagically.
-		
-		// Still not getting the USB mic in.
-		
 		int minAudioBufferSize = AudioRecord.getMinBufferSize(sampleRate,
-				android.media.AudioFormat.CHANNEL_IN_DEFAULT, // this - _DEFAULT
+				android.media.AudioFormat.CHANNEL_IN_DEFAULT,
 				android.media.AudioFormat.ENCODING_PCM_16BIT);
 		
 		int minAudioBufferSizeInSamples =  minAudioBufferSize / 2;
 		if (minAudioBufferSizeInSamples <= audioBufferSize ) {
 			AudioRecord audioInputStream = new AudioRecord(
-				MediaRecorder.AudioSource.DEFAULT, // this - .MIC
+				MediaRecorder.AudioSource.MIC, 
+				//  .DEFAULT or .MIC or .VOICE_RECOGNITION or .CAMCORDER  
+				// -- can depend on USB device implementation
+				
 				sampleRate,
-				android.media.AudioFormat.CHANNEL_IN_DEFAULT, // this - CHANNEL_IN_DEFAULT
+				android.media.AudioFormat.CHANNEL_IN_DEFAULT,
 				android.media.AudioFormat.ENCODING_PCM_16BIT,
 				audioBufferSize * 2);
 
