@@ -18,7 +18,8 @@ public class AndroidAudioOut implements AudioProcessor {
     private int bufferSize;
 
     public AndroidAudioOut(TarsosDSPAudioFormat audioFormat, int bufferSize, int streamType) {
-    	
+    	//TODO
+    	// make this a graceful exit for the app - not a crash to desktop
     	if (audioFormat.getChannels() != 1) {
             throw new IllegalArgumentException("TarsosDSP only supports mono audio channel count: " 
             		+ audioFormat.getChannels());

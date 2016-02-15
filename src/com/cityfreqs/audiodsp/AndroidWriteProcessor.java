@@ -25,7 +25,7 @@ public class AndroidWriteProcessor implements AudioProcessor {
 	// file size checks/warnings as recording
 	// storage capacity checks/warnings pre-record
 	
-	private static final String TAG = "AudioDSP-recorder";
+	private static final String TAG = "CFP_Recorder-writer";
     RandomAccessFile output;
     TarsosDSPAudioFormat audioFormat;
     private int audioLen = 0;

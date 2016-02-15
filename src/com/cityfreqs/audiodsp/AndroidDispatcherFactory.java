@@ -2,6 +2,7 @@ package com.cityfreqs.audiodsp;
 
 import android.media.AudioRecord;
 import android.media.MediaRecorder;
+import android.util.Log;
 import be.tarsos.dsp.AudioDispatcher;
 import be.tarsos.dsp.io.PipedAudioStream;
 import be.tarsos.dsp.io.TarsosDSPAudioFormat;
@@ -44,7 +45,7 @@ public class AndroidDispatcherFactory {
 		int minAudioBufferSizeInSamples =  minAudioBufferSize / 2;
 		if (minAudioBufferSizeInSamples <= audioBufferSize ) {
 			AudioRecord audioInputStream = new AudioRecord(
-				MediaRecorder.AudioSource.MIC, 
+				MediaRecorder.AudioSource.DEFAULT,
 				//  .DEFAULT or .MIC or .VOICE_RECOGNITION or .CAMCORDER  
 				// -- can depend on USB device implementation
 				
@@ -58,6 +59,9 @@ public class AndroidDispatcherFactory {
 			TarsosDSPAudioInputStream audioStream = new AndroidAudioInputStream(audioInputStream, format);
 			//start recording ! Opens the stream.
 			audioInputStream.startRecording();
+			//TODO
+			//DEBUGGING
+			Log.d("RECORDER", "Source: " + audioInputStream.getAudioSource());
 			return new AudioDispatcher(audioStream, audioBufferSize, bufferOverlap);
 		} 
 		else {

@@ -13,7 +13,10 @@ import be.tarsos.dsp.pitch.PitchDetectionResult;
 import be.tarsos.dsp.pitch.PitchProcessor;
 import be.tarsos.dsp.pitch.PitchProcessor.PitchEstimationAlgorithm;
 import android.app.Activity;
+import android.content.BroadcastReceiver;
 import android.content.Context;
+import android.content.Intent;
+import android.content.IntentFilter;
 import android.content.SharedPreferences;
 import android.graphics.Color;
 import android.hardware.usb.UsbDevice;
@@ -50,8 +53,8 @@ public class MainActivity extends Activity {
 	// add a file write mechanism for candidate 18.5+ grabs
 	// manual record as well as gate triggered	
 	
-	private static final String TAG = "AudioDSP";
-	private static final String VERSION = "1.2";
+	private static final String TAG = "CFP_Recorder";
+	private static final String VERSION = "1.2.8.6";
 	private static final boolean DEBUG = true;
 	
 	private WakeLock wakeLock;
@@ -66,7 +69,7 @@ public class MainActivity extends Activity {
 	private ThresholdGate thresholdGate;
 	private TarsosDSPAudioFormat tarsosAudioFormat;
 	private AndroidAudioOut androidAudioOut;	
-	private AudioManager audioManager;
+	private HeadsetIntentReceiver headsetReceiver;
 	
 	private AndroidWriteProcessor androidWriteProcessor;
 	
@@ -119,6 +122,8 @@ public class MainActivity extends Activity {
 	protected void onCreate(Bundle savedInstanceState) {
 		super.onCreate(savedInstanceState);
 		setContentView(R.layout.activity_main);
+		
+		headsetReceiver = new HeadsetIntentReceiver();
 		
 		pm = (PowerManager) this.getSystemService(Context.POWER_SERVICE);
 		sharedPrefs = PreferenceManager.getDefaultSharedPreferences(this);
@@ -200,6 +205,9 @@ public class MainActivity extends Activity {
 	@Override
 	protected void onResume() {
 		super.onResume();
+	    IntentFilter filter = new IntentFilter(Intent.ACTION_HEADSET_PLUG);
+	    registerReceiver(headsetReceiver, filter);
+		
 		if (wakeLock != null && wakeLock.isHeld()) {
 			// do nothing, we are recording...			
 		}
@@ -211,6 +219,8 @@ public class MainActivity extends Activity {
 				logger(TAG, "prepare audio fail.");
 			}
 		}
+		//TODO
+		// not drawing the values
 		// get settings from sharedPrefs
 		hiFreqSeekBar.setProgress(sharedPrefs.getInt("freq", DEFAULT_FREQ));
 		gateSeekBar.setProgress(sharedPrefs.getInt("gate", DEFAULT_GATE));
@@ -219,6 +229,7 @@ public class MainActivity extends Activity {
 	@Override
 	protected void onPause() {
 		super.onPause();
+		unregisterReceiver(headsetReceiver);
 		if (wakeLock != null && wakeLock.isHeld()) {
 			//TODO
 			// do nothing, we are recording...
@@ -331,7 +342,7 @@ public class MainActivity extends Activity {
 */	
 	private boolean prepareAudio() {
 		logger(TAG, "prepareAudio...");
-		
+		//audioManager = (AudioManager)getSystemService(Context.AUDIO_SERVICE);
 		//TODO
 		// need to step in here with usb audio search.
 		if (scanUsbDevices()) {
@@ -378,7 +389,7 @@ public class MainActivity extends Activity {
 		lastPitch = gate;
 		
 		// set dispatcher to internal audio
-		dispatcher = AndroidDispatcherFactory.fromDefaultMicrophone(sampleRate, bufferSize, 0);		
+		dispatcher = AndroidDispatcherFactory.fromDefaultMicrophone(sampleRate, bufferSize, 0);	
 		return true;
 	}
 	
@@ -499,18 +510,6 @@ public class MainActivity extends Activity {
 	}
 	
 	private boolean androidAudioOutput() {		
-		audioManager = (AudioManager)getSystemService(Context.AUDIO_SERVICE);
-		
-		//TODO this does not appear to be working...
-		if (audioManager.isSpeakerphoneOn()) {
-			// do not allow output at the moment
-			logger(TAG, "headphones needed!");
-			return false;
-		}
-		else {
-			logger(TAG, "headphones in use.");
-		}
-    			
 		androidAudioOut = new AndroidAudioOut(
 				tarsosAudioFormat, 
 				bufferSize,
@@ -520,6 +519,25 @@ public class MainActivity extends Activity {
 			return true;
 		else 
 			return false;
+	}
+	
+	// this does not account for USB Audio
+	private class HeadsetIntentReceiver extends BroadcastReceiver {
+	    @Override public void onReceive(Context context, Intent intent) {
+	        if (intent.getAction().equals(Intent.ACTION_HEADSET_PLUG)) {
+	            int state = intent.getIntExtra("state", -1);
+	            switch (state) {
+		            case 0:
+		                logger(TAG, "Headset is unplugged");
+		                break;
+		            case 1:
+		                logger(TAG, "Headset is plugged");
+		                break;
+		            default:
+		                logger(TAG, "Headset state unkonwn");
+	            }
+	        }
+	    }
 	}
 
 /*
@@ -633,9 +651,9 @@ public class MainActivity extends Activity {
 		        		AudioFormat.ENCODING_PCM_8BIT }) {
 		        	
 		            for (short channelConfig : new short[] { 
-		            		AudioFormat.CHANNEL_IN_DEFAULT, // this reports as working, 0x1
-		            		AudioFormat.CHANNEL_IN_MONO, 
-		            		AudioFormat.CHANNEL_IN_STEREO }) {
+		            		AudioFormat.CHANNEL_IN_DEFAULT,  //1
+		            		AudioFormat.CHANNEL_IN_MONO,  // 16
+		            		AudioFormat.CHANNEL_IN_STEREO }) { // 12
 		                try {
 		                    logger(TAG, "USB - try rate " + rate + "Hz, bits: " + audioFormat + ", channel: "+ channelConfig);
 		                    
@@ -643,14 +661,15 @@ public class MainActivity extends Activity {
 		                    if (buffSize != AudioRecord.ERROR_BAD_VALUE) {
 		                        // check if we can instantiate and have a success
 		                        AudioRecord recorder = new AudioRecord(
-		                        		AudioSource.DEFAULT, 
+		                        		AudioSource.DEFAULT,  //DEFAULT, MIC, CAMCORDER
 		                        		rate, 
 		                        		channelConfig, 
 		                        		audioFormat, 
 		                        		buffSize);
 	
 		                        if (recorder.getState() == AudioRecord.STATE_INITIALIZED) {
-		                        	logger(TAG, "USB - found, rate: " + rate + ", min-buff: " + buffSize);
+		                        	logger(TAG, "USB - found:: rate: " + rate + ", min-buff: " + buffSize + ", channel: " + channelConfig);
+		                        	logger(TAG, "USB - Audio source: " + recorder.getAudioSource());
 		                        	// set our values
 		                        	sampleRate = rate;
 		                        	channel = channelConfig;
@@ -676,7 +695,7 @@ public class MainActivity extends Activity {
 	    logger(TAG, "determine audioRecord failure.");
 	    return false;
 	}
-	
+
 	private int getClosestPowers(int reported) {
 		// return the next highest power from the minimum reported
 		// 512, 1024, 2048, 4096, 8192, 16384
