@@ -3,7 +3,7 @@ package com.cityfreqs.cfp_recorder;
 import java.util.HashMap;
 import java.util.Iterator;
 
-import com.cityfreqs.audiodsp.R;
+import com.cityfreqs.cfp_recorder.R;
 
 import be.tarsos.dsp.AudioDispatcher;
 import be.tarsos.dsp.AudioEvent;
@@ -53,7 +53,7 @@ public class MainActivity extends Activity {
 	// manual record as well as gate triggered	
 	
 	private static final String TAG = "CFP_Recorder";
-	private static final String VERSION = "1.2.8.13";
+	private static final String VERSION = "1.2.9.3";
 	private static final boolean DEBUG = true;
 	
 	private WakeLock wakeLock;

@@ -38,7 +38,7 @@ public class AndroidWriteProcessor implements AudioProcessor {
   
     private boolean ext_capable = false;
     private File ourExtDirectory;
-    private static final String OUR_DIRECTORY = "AudioDSP";
+    private static final String OUR_DIRECTORY = "CFPRecorder";
     private static final String FILE_EXTENSION = ".wav";
     private static final SimpleDateFormat TIMESTAMP_FORMAT = new SimpleDateFormat("yyyyMMdd-HH:mm:ss", Locale.ENGLISH);
     
@@ -301,8 +301,10 @@ public class AndroidWriteProcessor implements AudioProcessor {
     		ourExtDirectory = new File(Environment.getExternalStoragePublicDirectory(
     						Environment.DIRECTORY_MUSIC), OUR_DIRECTORY);
     		if (ourExtDirectory != null) {
-    		//if (ourExtDirectory.mkdir()) { // <-dunno, this returned false, create works though.
-    			return true;
+    			if (ourExtDirectory.mkdir()) {
+    				log("Make ext dir.");
+    				return true;
+    			}
     		}
     		else {
     			log("Create our ext directory error.");
