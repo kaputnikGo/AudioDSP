@@ -43,7 +43,7 @@ public class AndroidWriteProcessor implements AudioProcessor {
     private static final SimpleDateFormat TIMESTAMP_FORMAT = new SimpleDateFormat("yyyyMMdd-HH:mm:ss", Locale.ENGLISH);
     
     public boolean RECORDING;
-    private boolean ready;
+    //private boolean ready;
     
     public AndroidWriteProcessor(Context context, TarsosDSPAudioFormat audioFormat, String filename) {	
     	this.audioFormat = audioFormat;
@@ -56,13 +56,13 @@ public class AndroidWriteProcessor implements AudioProcessor {
     	if (isExternalStorageWritable()) {
     		if (createOurDirectory()) {
     			log("Ext storage ready, prep file...");
-    			prepareOutputFile();
+    			//prepareOutputFile();
     		}
     	}
     	else {
     		// prepare the internal
     		log("Int storage only, prep file...");
-    		prepareOutputFile();
+    		//prepareOutputFile();
     	}
     	// need to create audioFormat...
     }
@@ -70,10 +70,8 @@ public class AndroidWriteProcessor implements AudioProcessor {
     public AndroidWriteProcessor(TarsosDSPAudioFormat audioFormat, RandomAccessFile output) {
         // depends on valid, externally created output file
     	this.output = output;
-        this.audioFormat = audioFormat;
-        
+        this.audioFormat = audioFormat;       
         RECORDING = false;        
-        ready = readyRecording();
     }   
     
     
@@ -85,8 +83,9 @@ public class AndroidWriteProcessor implements AudioProcessor {
     	sessionFilename = filename;
     }
     
-    public boolean readyRecording() {
-        try {
+    public boolean prepRecording() {
+    	try {
+    		prepareOutputFile();
             output.write(new byte[HEADER_LENGTH]);
             log("Recording ready.");
             return true;
@@ -99,7 +98,7 @@ public class AndroidWriteProcessor implements AudioProcessor {
     }
     
     public void startRecording() {
-    	if (ready) {
+    	if (prepRecording()) {
     		RECORDING = true;
     		log("RECORDING...");
     	}
@@ -117,7 +116,7 @@ public class AndroidWriteProcessor implements AudioProcessor {
     				context, outputFile.getFreeSpace());
     	}
     	else
-    		return "Free: ERROR";
+    		return "Free: outputFile null";
     }
 
     
@@ -162,7 +161,6 @@ public class AndroidWriteProcessor implements AudioProcessor {
     		}    		
     		output = new RandomAccessFile(outputFile, "rw");
             RECORDING = false;        
-            ready = readyRecording();
     		return true;
     	}
     	catch (FileNotFoundException ex) {
@@ -190,7 +188,7 @@ public class AndroidWriteProcessor implements AudioProcessor {
     		return;
     	}
     	// add the extension and timestamp
-    	// eg: 20151218101432-capture.wav (24h)
+    	// eg: 20151218-10:14:32-capture.wav (24h)
     	filename = getTimestamp() + "-" + sessionFilename + FILE_EXTENSION;
     	
     	// file save will overwrite unless new name is used...
@@ -264,23 +262,12 @@ public class AndroidWriteProcessor implements AudioProcessor {
 		        //log("Recording write fail.");
 		    }
 		    RECORDING = false;
-		    resetForNextRecording();
     	}
     }
     
 /*********************************************************************************
  * utilities     
  */
-    private void resetForNextRecording() {
-    	// called by processingFinished, prepare new output file with new timestamp
-    	if (prepareOutputFile()) {
-    		log("Output file reset: " + filename);
-    	}
-    	else {
-    		// some error in readying the output file
-    		log("Output file reset error.");
-    	}
-    }
     private boolean isExternalStorageWritable() {
     	// is available for read and write
     	if (Environment.MEDIA_MOUNTED.equals(Environment.getExternalStorageState())) {
@@ -331,7 +318,7 @@ public class AndroidWriteProcessor implements AudioProcessor {
     
     private String getTimestamp() {
     	// for adding to default file save name
-    	// eg: 20151218101432
+    	// eg: 20151218-10:14:32-capture
     	return TIMESTAMP_FORMAT.format(new Date());
     }
     

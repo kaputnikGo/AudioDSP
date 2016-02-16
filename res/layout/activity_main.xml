@@ -32,17 +32,17 @@
         android:layout_below="@+id/processing_title"
         android:text="@string/threshold_gate" /> 
     <TextView
-        android:id="@+id/pitch_text"
+        android:id="@+id/gain_text"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:layout_below="@+id/threshold_text"
-        android:text="@string/pitch_text" />
+        android:text="@string/gain_text" />
     
      <TextView
         android:id="@+id/hifreq_text"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:layout_below="@+id/pitch_text"
+        android:layout_below="@+id/gain_text"
         android:layout_centerHorizontal="true" 
         android:textStyle="bold"
         android:text="@string/hifreq_text" />     

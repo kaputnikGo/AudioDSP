@@ -1,16 +1,16 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">CFP Recorder 1.2.8.6</string>
+    <string name="app_name">CFP Recorder 1.2.8.11</string>
     <string name="action_settings">Settings</string>
     
     <string name="debug_text">loading</string>
     
     <string name="processing_title">PROCESSING</string>
-    <string name="threshold_gate">SPL dB: </string>
+    <string name="threshold_gate">SPL dB:</string>
     
     <string name="hifreq_text">hpf: 18500.0</string>
-    <string name="gate_text">gate: -80.0</string>
-    <string name="pitch_text">pitch: -1.0</string>
+    <string name="gate_text">gate: N/A</string>
+    <string name="gain_text">gain: N/A</string>
    
     <string name="record_button_text">RECORD</string>
     

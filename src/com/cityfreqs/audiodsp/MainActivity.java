@@ -8,10 +8,7 @@ import be.tarsos.dsp.AudioEvent;
 import be.tarsos.dsp.filters.HighPass;
 import be.tarsos.dsp.filters.IIRFilter;
 import be.tarsos.dsp.io.TarsosDSPAudioFormat;
-import be.tarsos.dsp.pitch.PitchDetectionHandler;
-import be.tarsos.dsp.pitch.PitchDetectionResult;
-import be.tarsos.dsp.pitch.PitchProcessor;
-import be.tarsos.dsp.pitch.PitchProcessor.PitchEstimationAlgorithm;
+import android.annotation.SuppressLint;
 import android.app.Activity;
 import android.content.BroadcastReceiver;
 import android.content.Context;
@@ -54,7 +51,7 @@ public class MainActivity extends Activity {
 	// manual record as well as gate triggered	
 	
 	private static final String TAG = "CFP_Recorder";
-	private static final String VERSION = "1.2.8.6";
+	private static final String VERSION = "1.2.8.11";
 	private static final boolean DEBUG = true;
 	
 	private WakeLock wakeLock;
@@ -64,8 +61,8 @@ public class MainActivity extends Activity {
 	private Thread audioThread;
 	private AudioDispatcher dispatcher;
 	private IIRFilter hipassFilter;
-	private PitchDetectionHandler pdh;
-	private PitchProcessor pitchProcessor;
+	private AndroidMicHandler androidMicHandler;
+	private AndroidMicControl androidMicControl;
 	private ThresholdGate thresholdGate;
 	private TarsosDSPAudioFormat tarsosAudioFormat;
 	private AndroidAudioOut androidAudioOut;	
@@ -80,12 +77,11 @@ public class MainActivity extends Activity {
 	private TextView gateText;
 	private SeekBar gateSeekBar;
 	private TextView thresholdText;
-	private TextView pitchText;
+	private TextView gainText;
 	private Button recordButton;
 	
 	private float hiFreqGate;
 	private float gate;
-	private float lastPitch;
 	
 	private int sampleRate;
 	private int bufferSize;
@@ -112,8 +108,6 @@ public class MainActivity extends Activity {
 	private static final int DEFAULT_FREQ = 37;
 	private static final int DEFAULT_GATE = 20;
 	
-	private static final PitchEstimationAlgorithm PITCH_ALGORITHM = PitchEstimationAlgorithm.FFT_YIN;
-		
 	// USB
 	private DeviceContainer deviceContainer;
 	private UsbManager usbManager;
@@ -140,7 +134,7 @@ public class MainActivity extends Activity {
 		});
 
 		thresholdText = (TextView) findViewById(R.id.threshold_text);
-		pitchText = (TextView) findViewById(R.id.pitch_text);
+		gainText = (TextView) findViewById(R.id.gain_text);
 		audioVisualiserView = (AudioVisualiserView) findViewById(R.id.audio_visualiser_view);		
 		
 		hifreqText = (TextView) findViewById(R.id.hifreq_text);
@@ -266,12 +260,6 @@ public class MainActivity extends Activity {
 /*
 * Interface controls   
 */	  	
-	private void updatePitch(float pitchIn) {
-		if (pitchIn >= hiFreqGate) {
-			lastPitch = pitchIn;
-		}
-	}
-	
 	private void updateHiFilter() {
 		hifreqText.setText("hpf: " + Float.toString(hiFreqGate));
 		// changed == 0 - 21,000 : step 500		
@@ -287,11 +275,9 @@ public class MainActivity extends Activity {
 	}
 	private void updateThreshold(double level) {
 		thresholdText.setText("SPL dB: " + String.format("%.2f", level));
-		if (lastPitch >= hiFreqGate) {
-			//logger(TAG, "freq thru gate: " + lastPitch);
-		}
 	}
 	
+	@SuppressLint("Wakelock")
 	private void toggleRecording() {
         wakeLock = pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, TAG); 
 	
@@ -309,6 +295,7 @@ public class MainActivity extends Activity {
 				androidWriteProcessor.startRecording();
 				recordButton.setText("RECORDING...");
 				recordButton.setBackgroundColor(Color.RED);
+				logger(TAG, androidWriteProcessor.getFreeSpace(this));
 				wakeLock.acquire();
 			}
 		}
@@ -386,7 +373,6 @@ public class MainActivity extends Activity {
 		// set from seekbars set by sharedPrefs
 		hiFreqGate = hiFreqSeekBar.getProgress() * FREQ_STEP;
 		gate = gateSeekBar.getProgress() - 100;
-		lastPitch = gate;
 		
 		// set dispatcher to internal audio
 		dispatcher = AndroidDispatcherFactory.fromDefaultMicrophone(sampleRate, bufferSize, 0);	
@@ -397,14 +383,15 @@ public class MainActivity extends Activity {
 	
 	private void dispatcherLoadProcesses() {
 //PROCESSES
-		if (pitchInProcess()) {
-			dispatcher.addAudioProcessor(pitchProcessor);
-			logger(TAG, "pitchProcessor added.");
+		if (micInProcess()) {
+			dispatcher.addAudioProcessor(androidMicControl);
+			gainText.setText("gain: " + androidMicControl.getGain());
+			logger(TAG, "androidMicControl added.");
 		}
 		else {
-			logger(TAG, "pitch processor failed to load.");
+			logger(TAG, "androidMicControl failed to load.");
 		}
-
+		
 		if (hipassFilterProcess()) {
 			dispatcher.addAudioProcessor(hipassFilter);
 			logger(TAG, "hipassFilter added.");
@@ -412,7 +399,7 @@ public class MainActivity extends Activity {
 		else {
 			logger(TAG, "highpassFilter failed to load.");
 		}
-	
+		
 		if (thresholdGateProcess()) {
 			dispatcher.addAudioProcessor(thresholdGate);
 			logger(TAG, "threshold gate added.");
@@ -420,9 +407,8 @@ public class MainActivity extends Activity {
 		else {
 			logger(TAG, "threshold gate failed to load.");
 		}
-	
-//OUPUT	
-		
+
+//OUPUT			
 		if (androidWriteProcess()) {
 			dispatcher.addAudioProcessor(androidWriteProcessor);
 			logger(TAG, "write processor added.");
@@ -452,33 +438,31 @@ public class MainActivity extends Activity {
 		if (hipassFilter != null) 
 			return true;		
 		else 
-			return false;		
+			return false;
 	}
 	
-	private boolean pitchInProcess() {		
-		pdh = new PitchDetectionHandler() {
+	private boolean micInProcess() {		
+
+		androidMicHandler = new AndroidMicHandler() {
 			@Override
-			public void handlePitch(PitchDetectionResult result, AudioEvent audioEvent) {
-				final float pitchHz = result.getPitch();
+			public void handleAudio(AudioEvent audioEvent) {			
 				final byte[] byteBuffer = audioEvent.getByteBuffer();
-			
+				
 				runOnUiThread(new Runnable() {
 					@Override
 					public void run() {
 						audioVisualiserView.updateVisualiser(byteBuffer);
-						pitchText.setText("pitch: " + pitchHz);
 						// get the SPL as well
-						updatePitch(pitchHz);
 						updateThreshold(thresholdGate.currentSPL());
 					}
 				});
 			}
-		};
-		pitchProcessor = new PitchProcessor(PITCH_ALGORITHM, sampleRate, bufferSize, pdh);
+		};		
+		androidMicControl = new AndroidMicControl(androidMicHandler);
 		
-		if (pitchProcessor != null) 
+		if (androidMicControl != null)
 			return true;
-		else 
+		else
 			return false;
 	}
 
@@ -502,7 +486,6 @@ public class MainActivity extends Activity {
 		// then:
 		androidWriteProcessor = new AndroidWriteProcessor(this, tarsosAudioFormat, "capture");
 		if (androidWriteProcessor != null) {
-			logger(TAG, androidWriteProcessor.getFreeSpace(this));
 			return true;
 		}
 		else
@@ -534,7 +517,7 @@ public class MainActivity extends Activity {
 		                logger(TAG, "Headset is plugged");
 		                break;
 		            default:
-		                logger(TAG, "Headset state unkonwn");
+		                logger(TAG, "Headset state unknown");
 	            }
 	        }
 	    }
