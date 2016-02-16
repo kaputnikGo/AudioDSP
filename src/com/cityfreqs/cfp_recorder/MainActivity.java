@@ -1,7 +1,9 @@
-package com.cityfreqs.audiodsp;
+package com.cityfreqs.cfp_recorder;
 
 import java.util.HashMap;
 import java.util.Iterator;
+
+import com.cityfreqs.audiodsp.R;
 
 import be.tarsos.dsp.AudioDispatcher;
 import be.tarsos.dsp.AudioEvent;
@@ -51,13 +53,14 @@ public class MainActivity extends Activity {
 	// manual record as well as gate triggered	
 	
 	private static final String TAG = "CFP_Recorder";
-	private static final String VERSION = "1.2.8.11";
+	private static final String VERSION = "1.2.8.13";
 	private static final boolean DEBUG = true;
 	
 	private WakeLock wakeLock;
 	private PowerManager pm;
 	private SharedPreferences sharedPrefs;
 	
+	private AudioManager audioManager;
 	private Thread audioThread;
 	private AudioDispatcher dispatcher;
 	private IIRFilter hipassFilter;
@@ -119,6 +122,7 @@ public class MainActivity extends Activity {
 		
 		headsetReceiver = new HeadsetIntentReceiver();
 		
+		audioManager = (AudioManager)getSystemService(Context.AUDIO_SERVICE);
 		pm = (PowerManager) this.getSystemService(Context.POWER_SERVICE);
 		sharedPrefs = PreferenceManager.getDefaultSharedPreferences(this);
 		
@@ -213,10 +217,10 @@ public class MainActivity extends Activity {
 				logger(TAG, "prepare audio fail.");
 			}
 		}
-		//TODO
-		// not drawing the values
-		// get settings from sharedPrefs
+		// need to remind progress bars of max value first..
+		hiFreqSeekBar.setMax(42);
 		hiFreqSeekBar.setProgress(sharedPrefs.getInt("freq", DEFAULT_FREQ));
+		gateSeekBar.setMax(100);
 		gateSeekBar.setProgress(sharedPrefs.getInt("gate", DEFAULT_GATE));
 	}
 	
@@ -300,6 +304,22 @@ public class MainActivity extends Activity {
 			}
 		}
 	}
+	
+	private void toggleOutput(boolean allow) {
+		// if no headset, mute the audio output else feedback
+		if (allow) {
+			// volume to full
+			audioManager.setStreamVolume(AudioManager.STREAM_MUSIC, 
+					audioManager.getStreamMaxVolume(AudioManager.STREAM_MUSIC) / 2, 
+					AudioManager.FLAG_SHOW_UI);
+		}
+		else {
+			// volume to 0
+			audioManager.setStreamVolume(AudioManager.STREAM_MUSIC, 
+					0, 
+					AudioManager.FLAG_SHOW_UI);
+		}
+	}
 
 /*
 * options settings 
@@ -329,7 +349,6 @@ public class MainActivity extends Activity {
 */	
 	private boolean prepareAudio() {
 		logger(TAG, "prepareAudio...");
-		//audioManager = (AudioManager)getSystemService(Context.AUDIO_SERVICE);
 		//TODO
 		// need to step in here with usb audio search.
 		if (scanUsbDevices()) {
@@ -511,10 +530,12 @@ public class MainActivity extends Activity {
 	            int state = intent.getIntExtra("state", -1);
 	            switch (state) {
 		            case 0:
-		                logger(TAG, "Headset is unplugged");
+		                logger(TAG, "Headset is unplugged, mute output");
+		                toggleOutput(false);
 		                break;
 		            case 1:
 		                logger(TAG, "Headset is plugged");
+		                toggleOutput(true);
 		                break;
 		            default:
 		                logger(TAG, "Headset state unknown");

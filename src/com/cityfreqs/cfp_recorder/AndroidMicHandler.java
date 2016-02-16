@@ -1,4 +1,4 @@
-package com.cityfreqs.audiodsp;
+package com.cityfreqs.cfp_recorder;
 
 import be.tarsos.dsp.AudioEvent;
 

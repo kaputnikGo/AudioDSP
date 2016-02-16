@@ -1,4 +1,4 @@
-package com.cityfreqs.audiodsp;
+package com.cityfreqs.cfp_recorder;
 
 public class AudioPcmQueue {
 	// ref: http://stackoverflow.com/questions/15051889/playing-back-audio-with-a-delay

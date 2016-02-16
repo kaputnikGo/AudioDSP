@@ -1,4 +1,4 @@
-package com.cityfreqs.audiodsp;
+package com.cityfreqs.cfp_recorder;
 
 import android.content.Context;
 import android.graphics.Canvas;

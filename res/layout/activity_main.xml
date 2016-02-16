@@ -5,7 +5,7 @@
     android:paddingLeft="@dimen/activity_horizontal_margin"
     android:paddingRight="@dimen/activity_horizontal_margin"
     android:paddingTop="@dimen/activity_vertical_margin"
-    tools:context="com.cityfreqs.audiodsp.MainActivity" xmlns:android="http://schemas.android.com/apk/res/android">
+    tools:context="com.cityfreqs.cfp_recorder.MainActivity" xmlns:android="http://schemas.android.com/apk/res/android">
     
     <TextView
         android:id="@+id/debug_text"
@@ -88,7 +88,7 @@
         android:layout_below="@+id/record_button"
         android:background="#000000"/> 
           
-    <com.cityfreqs.audiodsp.AudioVisualiserView
+    <com.cityfreqs.cfp_recorder.AudioVisualiserView
         android:id="@+id/audio_visualiser_view"
         android:layout_width="match_parent"
         android:layout_height="match_parent"

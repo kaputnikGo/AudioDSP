@@ -1,4 +1,4 @@
-package com.cityfreqs.audiodsp;
+package com.cityfreqs.cfp_recorder;
 
 import java.io.BufferedOutputStream;
 import java.io.ByteArrayOutputStream;
@@ -43,7 +43,6 @@ public class AndroidWriteProcessor implements AudioProcessor {
     private static final SimpleDateFormat TIMESTAMP_FORMAT = new SimpleDateFormat("yyyyMMdd-HH:mm:ss", Locale.ENGLISH);
     
     public boolean RECORDING;
-    //private boolean ready;
     
     public AndroidWriteProcessor(Context context, TarsosDSPAudioFormat audioFormat, String filename) {	
     	this.audioFormat = audioFormat;
@@ -55,14 +54,12 @@ public class AndroidWriteProcessor implements AudioProcessor {
     	// prepare the default file save location here
     	if (isExternalStorageWritable()) {
     		if (createOurDirectory()) {
-    			log("Ext storage ready, prep file...");
-    			//prepareOutputFile();
+    			log("Ext storage ready.");
     		}
     	}
     	else {
     		// prepare the internal
-    		log("Int storage only, prep file...");
-    		//prepareOutputFile();
+    		log("Int storage only.");
     	}
     	// need to create audioFormat...
     }
@@ -229,7 +226,7 @@ public class AndroidWriteProcessor implements AudioProcessor {
 	        } 
 	        catch (IOException e) {
 	            e.printStackTrace();
-	            //log("recording fail.");
+	            log("recording fail.");
 	        }
 	        return true;
         }
@@ -259,7 +256,7 @@ public class AndroidWriteProcessor implements AudioProcessor {
 		    }
 		    catch (IOException e){
 		        e.printStackTrace();
-		        //log("Recording write fail.");
+		        log("Recording write fail.");
 		    }
 		    RECORDING = false;
     	}
