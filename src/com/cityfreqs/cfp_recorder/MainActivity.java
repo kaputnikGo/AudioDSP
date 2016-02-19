@@ -53,7 +53,7 @@ public class MainActivity extends Activity {
 	// manual record as well as gate triggered	
 	
 	private static final String TAG = "CFP_Recorder";
-	private static final String VERSION = "1.2.9.3";
+	private static final String VERSION = "1.2.9.4";
 	private static final boolean DEBUG = true;
 	
 	private WakeLock wakeLock;
@@ -114,6 +114,7 @@ public class MainActivity extends Activity {
 	// USB
 	private DeviceContainer deviceContainer;
 	private UsbManager usbManager;
+	private boolean useUSB;
 	
 	@Override
 	protected void onCreate(Bundle savedInstanceState) {
@@ -121,6 +122,7 @@ public class MainActivity extends Activity {
 		setContentView(R.layout.activity_main);
 		
 		headsetReceiver = new HeadsetIntentReceiver();
+		useUSB = false;
 		
 		audioManager = (AudioManager)getSystemService(Context.AUDIO_SERVICE);
 		pm = (PowerManager) this.getSystemService(Context.POWER_SERVICE);
@@ -305,10 +307,20 @@ public class MainActivity extends Activity {
 		}
 	}
 	
-	private void toggleOutput(boolean allow) {
+	private void toggleHeadset(boolean allow) {
+		// first:
+		// allow for USB i/o
+		if (useUSB) {
+			// using USB, ensure volume on
+			audioManager.setStreamVolume(AudioManager.STREAM_MUSIC, 
+					audioManager.getStreamMaxVolume(AudioManager.STREAM_MUSIC) / 2, 
+					AudioManager.FLAG_SHOW_UI);			
+			return;
+		}
+		// then:
 		// if no headset, mute the audio output else feedback
 		if (allow) {
-			// volume to full
+			// volume to on
 			audioManager.setStreamVolume(AudioManager.STREAM_MUSIC, 
 					audioManager.getStreamMaxVolume(AudioManager.STREAM_MUSIC) / 2, 
 					AudioManager.FLAG_SHOW_UI);
@@ -358,6 +370,7 @@ public class MainActivity extends Activity {
 				// have found, need to get TarsosDSP to use...
 				// set dispatcher to usb
 				dispatcher = AndroidDispatcherFactory.fromUsbMicrophone(sampleRate, bufferSize, 0);	
+				useUSB = true;
 				logger(TAG, "dispatcher set to USB audio.");
 				return true;
 			}
@@ -523,7 +536,6 @@ public class MainActivity extends Activity {
 			return false;
 	}
 	
-	// this does not account for USB Audio
 	private class HeadsetIntentReceiver extends BroadcastReceiver {
 	    @Override public void onReceive(Context context, Intent intent) {
 	        if (intent.getAction().equals(Intent.ACTION_HEADSET_PLUG)) {
@@ -531,11 +543,11 @@ public class MainActivity extends Activity {
 	            switch (state) {
 		            case 0:
 		                logger(TAG, "Headset is unplugged, mute output");
-		                toggleOutput(false);
+		                toggleHeadset(false);
 		                break;
 		            case 1:
 		                logger(TAG, "Headset is plugged");
-		                toggleOutput(true);
+		                toggleHeadset(true);
 		                break;
 		            default:
 		                logger(TAG, "Headset state unknown");
@@ -564,6 +576,7 @@ public class MainActivity extends Activity {
 	private boolean scanUsbDevices() {
 		// search for any attached usb devices that we can read properties,
 		// create a DeviceContainer for them.
+		// add a listener service in case user unplugs usb and audio gets re-routed (fdbk)
 		//TODO
 		logger(TAG, "scanning usb for audio device(s)...");
 		usbManager = (UsbManager) getSystemService(Context.USB_SERVICE);
@@ -583,6 +596,31 @@ public class MainActivity extends Activity {
 		}
 		return found;
 	}
+	
+	BroadcastReceiver usbReceiver = new BroadcastReceiver() {
+	    public void onReceive(Context context, Intent intent) {
+	        String action = intent.getAction();
+	        
+		    if (UsbManager.ACTION_USB_DEVICE_DETACHED.equals(action)) {
+		    	UsbDevice device = (UsbDevice)intent.getParcelableExtra(UsbManager.EXTRA_DEVICE);
+		        if (device != null) {
+		            // prepare for re-routing of audio to handset
+		            useUSB = false;
+		            logger(TAG, "USB device is unplugged, mute output");
+		            toggleHeadset(false);
+		        }
+		    }
+		    else if (UsbManager.ACTION_USB_DEVICE_ATTACHED.equals(action)) {
+		    	UsbDevice device = (UsbDevice)intent.getParcelableExtra(UsbManager.EXTRA_DEVICE);
+		        if (device != null) {
+		            // prepare for re-routing of audio to USB
+		            useUSB = true;
+		            logger(TAG, "USB device is plugged in, allow output");
+		            toggleHeadset(true);
+		        }
+		    }
+	    }
+	};
 
 	
 /*
