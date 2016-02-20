@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">CFP Recorder 1.2.9.4</string>
+    <string name="app_name">CFP Recorder 1.2.9.5</string>
     <string name="action_settings">Settings</string>
     
     <string name="debug_text">loading</string>

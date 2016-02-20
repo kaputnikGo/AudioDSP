@@ -311,7 +311,9 @@ public class AndroidWriteProcessor implements AudioProcessor {
     			return false;
     		}
     	}
-    	log("Ext storage not available.");
+    	else {
+    		log("Ext storage not available.");
+    	}
     	return false;
     }
     

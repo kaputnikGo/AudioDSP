@@ -53,7 +53,7 @@ public class MainActivity extends Activity {
 	// manual record as well as gate triggered	
 	
 	private static final String TAG = "CFP_Recorder";
-	private static final String VERSION = "1.2.9.4";
+	private static final String VERSION = "1.2.9.5";
 	private static final boolean DEBUG = true;
 	
 	private WakeLock wakeLock;
