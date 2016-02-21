@@ -53,7 +53,7 @@ public class MainActivity extends Activity {
 	// manual record as well as gate triggered	
 	
 	private static final String TAG = "CFP_Recorder";
-	private static final String VERSION = "1.2.9.5";
+	private static final String VERSION = "1.3.0.1";
 	private static final boolean DEBUG = true;
 	
 	private WakeLock wakeLock;
@@ -173,7 +173,7 @@ public class MainActivity extends Activity {
 			public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
 				// place within usable range -100 - 0 
 				gate = progress - 100;
-				updateGate(gate);
+				updateGate();
 				
 			}
 			@Override
@@ -273,10 +273,19 @@ public class MainActivity extends Activity {
 			hipassFilter.setFrequency(hiFreqGate);
 		}
 	}
-	private void updateGate(double level) {
-		gateText.setText("gate: " + Float.toString(gate));
+	private void updateGate() {
 		if (thresholdGate != null) {
-			thresholdGate.setThreshold(level);
+			if (gate <= -100.0) {
+				// switch gate off, save cycles
+				thresholdGate.setEnabled(false);
+				gateText.setText("gate: OFF");
+			}
+			else {
+				thresholdGate.setEnabled(true);
+				thresholdGate.setThreshold(gate);
+				gateText.setText("gate: " + Float.toString(gate));
+			}
+			
 		}
 	}
 	private void updateThreshold(double level) {

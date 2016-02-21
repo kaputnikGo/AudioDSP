@@ -6,7 +6,7 @@ import be.tarsos.dsp.AudioProcessor;
 public class ThresholdGate implements AudioProcessor {
 	public static final double DEFAULT_THRESHOLD = -70.0; //db	
 	private double threshold;
-	private boolean silenceEnabled;
+	private boolean gateEnabled;
 	private boolean isSilent;
 	private double currentSPL = 0;
 
@@ -15,9 +15,9 @@ public class ThresholdGate implements AudioProcessor {
 	}
 	
 	//Create a new silence detector with a defined threshold.
-	public ThresholdGate(double silenceThreshold, boolean silenceEnabled){
-		this.threshold = silenceThreshold;
-		this.silenceEnabled = silenceEnabled;
+	public ThresholdGate(double gateThreshold, boolean gateEnabled){
+		this.threshold = gateThreshold;
+		this.gateEnabled = gateEnabled;
 	}
 
 	public double currentSPL() {
@@ -26,6 +26,10 @@ public class ThresholdGate implements AudioProcessor {
 	
 	public void setThreshold(double threshold) {
 		this.threshold = threshold;
+	}
+	
+	public void setEnabled(boolean gateEnabled) {
+		this.gateEnabled = gateEnabled;
 	}
 	
 	//Calculates the local (linear) energy of an audio buffer.
@@ -58,9 +62,12 @@ public class ThresholdGate implements AudioProcessor {
 
 	@Override
 	public boolean process(AudioEvent audioEvent) {
-		isSilent = isSilence(audioEvent.getFloatBuffer());
-		if (silenceEnabled && isSilent) {
-			audioEvent.clearFloatBuffer();
+		if (gateEnabled) {
+			// do threshold processing
+			isSilent = isSilence(audioEvent.getFloatBuffer());
+			if (isSilent) {
+				audioEvent.clearFloatBuffer();
+			}
 		}
 		return true;
 	}
