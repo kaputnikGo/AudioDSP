@@ -37,6 +37,13 @@
         android:layout_height="wrap_content"
         android:layout_below="@+id/threshold_text"
         android:text="@string/gain_text" />
+    <TextView
+        android:id="@+id/timer_text"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_below="@+id/processing_title"
+        android:layout_alignParentEnd="true"
+        android:text="@string/timer_text" />
     
      <TextView
         android:id="@+id/hifreq_text"

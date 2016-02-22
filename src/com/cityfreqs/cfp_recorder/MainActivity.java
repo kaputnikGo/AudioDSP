@@ -25,6 +25,7 @@ import android.media.AudioManager;
 import android.media.AudioRecord;
 import android.media.MediaRecorder.AudioSource;
 import android.os.Bundle;
+import android.os.Handler;
 import android.os.PowerManager;
 import android.os.PowerManager.WakeLock;
 import android.preference.PreferenceManager;
@@ -50,10 +51,12 @@ public class MainActivity extends Activity {
 	// freq range to seek: 18.5kHz - 20kHz
 	
 	// add a file write mechanism for candidate 18.5+ grabs
-	// manual record as well as gate triggered	
+	// manual record as well as gate triggered
+	
+	// add hpf min to OFF as in the gate method
 	
 	private static final String TAG = "CFP_Recorder";
-	private static final String VERSION = "1.3.0.1";
+	private static final String VERSION = "1.3.0.2";
 	private static final boolean DEBUG = true;
 	
 	private WakeLock wakeLock;
@@ -81,6 +84,7 @@ public class MainActivity extends Activity {
 	private SeekBar gateSeekBar;
 	private TextView thresholdText;
 	private TextView gainText;
+	private TextView timerText;
 	private Button recordButton;
 	
 	private float hiFreqGate;
@@ -110,6 +114,10 @@ public class MainActivity extends Activity {
 	
 	private static final int DEFAULT_FREQ = 37;
 	private static final int DEFAULT_GATE = 20;
+	
+	private long startTime;
+	private Handler timerHandler;
+	private Runnable timerRunnable;
 	
 	// USB
 	private DeviceContainer deviceContainer;
@@ -141,6 +149,7 @@ public class MainActivity extends Activity {
 
 		thresholdText = (TextView) findViewById(R.id.threshold_text);
 		gainText = (TextView) findViewById(R.id.gain_text);
+		timerText = (TextView) findViewById(R.id.timer_text);
 		audioVisualiserView = (AudioVisualiserView) findViewById(R.id.audio_visualiser_view);		
 		
 		hifreqText = (TextView) findViewById(R.id.hifreq_text);
@@ -187,6 +196,20 @@ public class MainActivity extends Activity {
 			
 		});
 		
+		// on screen timer
+		timerHandler = new Handler();
+		timerRunnable = new Runnable() {
+			@Override
+			public void run() {
+				long millis = System.currentTimeMillis() - startTime;
+				int seconds = (int)(millis / 1000);
+				int minutes = seconds / 60;
+				seconds = seconds % 60;
+				timerText.setText(String.format("timer - %02d:%02d", minutes, seconds));
+				timerHandler.postDelayed(this, 500);
+			}
+		};
+		
 		// change the look of this button to indicate state		
 		recordButton = (Button) findViewById(R.id.record_button);
 		recordButton.setOnClickListener(new View.OnClickListener() {
@@ -194,6 +217,7 @@ public class MainActivity extends Activity {
                 toggleRecording();
             }
         });
+		
 		
 		// save settings to sharedPrefs
 		SharedPreferences.Editor editor = sharedPrefs.edit();
@@ -244,6 +268,8 @@ public class MainActivity extends Activity {
 				dispatcher = null;
 			}			
 		}
+		timerHandler.removeCallbacks(timerRunnable);
+		
 		// save settings to sharedPrefs
 		SharedPreferences.Editor editor = sharedPrefs.edit();
 		editor.putInt("freq", hiFreqSeekBar.getProgress());
@@ -299,6 +325,8 @@ public class MainActivity extends Activity {
 		if (androidWriteProcessor != null) {
 			if (androidWriteProcessor.RECORDING) {
 				androidWriteProcessor.stopRecording();
+				timerHandler.removeCallbacks(timerRunnable);
+				timerText.setText("timer - 00:00");
 				recordButton.setText("RECORD");
 				recordButton.setBackgroundColor(Color.LTGRAY);
 				if (wakeLock.isHeld()) {
@@ -308,6 +336,8 @@ public class MainActivity extends Activity {
 			}
 			else {
 				androidWriteProcessor.startRecording();
+				startTime = System.currentTimeMillis();
+				timerHandler.postDelayed(timerRunnable, 0);
 				recordButton.setText("RECORDING...");
 				recordButton.setBackgroundColor(Color.RED);
 				logger(TAG, androidWriteProcessor.getFreeSpace(this));
