@@ -2,7 +2,7 @@ package com.cityfreqs.cfp_recorder;
 
 public class AudioPcmQueue {
 	// ref: http://stackoverflow.com/questions/15051889/playing-back-audio-with-a-delay
-	private static final String TAG = "AudioPcmQueue";
+	private static final String TAG = "CFP_R-pcm";
 	private float mBuf[] = null; //buffer
 	private int mWrIdx = 0; //writeIndex
 	private int mRdIdx = 0; //readIndex

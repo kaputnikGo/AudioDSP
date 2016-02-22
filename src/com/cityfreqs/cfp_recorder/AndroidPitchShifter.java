@@ -5,7 +5,7 @@ import be.tarsos.dsp.AudioProcessor;
 import be.tarsos.dsp.util.fft.FFT;
 
 public class AndroidPitchShifter implements AudioProcessor {
-	private static final String TAG = "CFP_Recorder-APS";
+	private static final String TAG = "CFP_R-pitch";
 	private final FFT fft;
 	private final int size;
 	private final float[] currentMagnitudes;

@@ -9,7 +9,7 @@ import android.util.AttributeSet;
 import android.view.View;
 
 public class AudioVisualiserView extends View {
-	private static final String TAG = "CFP_Recorder-visual";
+	private static final String TAG = "CFP_R-visual";
 	private byte[] mBytes;
 	private float[] mPoints;
 	private Rect mRect = new Rect();

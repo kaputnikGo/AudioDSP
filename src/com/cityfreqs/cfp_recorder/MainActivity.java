@@ -55,8 +55,8 @@ public class MainActivity extends Activity {
 	
 	// add hpf min to OFF as in the gate method
 	
-	private static final String TAG = "CFP_Recorder";
-	private static final String VERSION = "1.3.0.2";
+	private static final String TAG = "CFP_R";
+	private static final String VERSION = "1.3.0.3";
 	private static final boolean DEBUG = true;
 	
 	private WakeLock wakeLock;
@@ -174,6 +174,7 @@ public class MainActivity extends Activity {
 		});
 		
 		gateText = (TextView) findViewById(R.id.gate_text);
+		gateText.setText("gate: " + Float.toString(DEFAULT_GATE - 100));
 		gateSeekBar = (SeekBar) findViewById(R.id.gate_seek);
 		gateSeekBar.setMax(100);
 		gateSeekBar.setProgress(DEFAULT_GATE); // -80dB
@@ -315,7 +316,12 @@ public class MainActivity extends Activity {
 		}
 	}
 	private void updateThreshold(double level) {
-		thresholdText.setText("SPL dB: " + String.format("%.2f", level));
+		if (gate <= -100.0) {
+			thresholdText.setText("SPL dB: gate off");
+		}
+		else {
+			thresholdText.setText("SPL dB: " + String.format("%.2f", level));
+		}
 	}
 	
 	@SuppressLint("Wakelock")

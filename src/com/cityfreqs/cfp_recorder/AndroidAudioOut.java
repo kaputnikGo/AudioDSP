@@ -10,7 +10,7 @@ import be.tarsos.dsp.io.TarsosDSPAudioFormat;
 
 public class AndroidAudioOut implements AudioProcessor {
     public static final int DEFAULT_STREAM_TYPE = AudioManager.STREAM_MUSIC;
-    private static final String TAG = "AudioDSP-AndroidAudioOut";
+    private static final String TAG = "CFP_R-output";
     private final AudioTrack audioTrack;
     private int audioReturn;
     private int overlap;
